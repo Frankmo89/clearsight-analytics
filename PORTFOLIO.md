@@ -2,6 +2,8 @@
 
 **Francisco Molina (Frank Mo)** | **ML/DNN Lead & UI/UX Architect**
 
+🚀 **[View Live Interactive Demo](https://clearsight-frankmo.streamlit.app/)**
+
 While ClearSight Analytics was a collaborative team effort, this document outlines the specific architectural decisions, machine learning models, and software engineering components I personally designed and implemented for this Capstone project.
 
 My focus was bridging the gap between raw algorithmic performance and actual clinical utility—ensuring that our AI system was not only accurate but also interpretable, safe, and easily adoptable by healthcare professionals.

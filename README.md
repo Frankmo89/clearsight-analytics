@@ -15,6 +15,8 @@ https://github.com/user-attachments/assets/cace6419-dd8c-4262-8358-8a1fd07e2b9c
 [![Groq](https://img.shields.io/badge/Groq-Llama_3.1-f59e0b)](https://groq.com/)
 [![License](https://img.shields.io/badge/License-Academic-lightgrey)](LICENSE)
 
+### 🚀 [▶ Play Live Demo](https://clearsight-frankmo.streamlit.app/)
+
 **ClearSight Analytics** is a high-fidelity multimodal AI platform designed to assist healthcare professionals in high-stakes clinical decision-making. It combines traditional machine learning, deep learning, computer vision, NLP, and generative AI to provide a 360-degree risk assessment of diabetic patients — from hospital readmission probability to retinal complication screening and AI-powered drug recommendations.
 
 > ⚠️ **This is an academic Capstone Project.** It is not a certified medical device and must not be used for real clinical diagnosis.
