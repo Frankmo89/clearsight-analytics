@@ -3426,255 +3426,269 @@ def page_predict() -> None:
         </div>
         """
 
-    # ── Render persisted M1 / M2 gauges ──────────────────────────────
-    if "m1_result" in st.session_state or "m2_result" in st.session_state:
-        st.markdown("""
-        <div class="section-head">
-          <span class="num">🎯</span><h2>Inference Results</h2><div class="line"></div>
-        </div>""", unsafe_allow_html=True)
-        st.markdown(
-            "<p style='color:#94a3b8; font-size:0.95rem; margin:-0.5rem 0 1.2rem;'>"
-            "🎯 <b>Clinical Metric:</b> Probability of unplanned hospital readmission "
-            "within <b>30 days</b> of discharge.</p>",
-            unsafe_allow_html=True,
-        )
-        col_m1, col_m2 = st.columns(2, gap="large")
-        with col_m1:
-            if "m1_result" in st.session_state:
-                r = st.session_state["m1_result"]
-                st.markdown(get_gauge_html(r["proba"], "M1 · XGBOOST ENSEMBLE", r["latency"], threshold=0.38), unsafe_allow_html=True)
-        with col_m2:
-            if "m2_result" in st.session_state:
-                r = st.session_state["m2_result"]
-                st.markdown(get_gauge_html(r["proba"], "M2 · DEEP LEARNING DNN", r["latency"], threshold=0.38), unsafe_allow_html=True)
+    # ── Results tabs ─────────────────────────────────────────────────
+    _any_result = (
+        "m1_result" in st.session_state
+        or "m2_result" in st.session_state
+        or "m5_result" in st.session_state
+        or "m4_result" in st.session_state
+    )
+    if _any_result:
+        _tab1, _tab2, _tab3 = st.tabs([
+            "🫀 Readmission Risk (M1 & M2)",
+            "🧪 Clinical Notes (M4)",
+            "🏥 Capacity & Ops (M5)",
+        ])
 
-    # ── Render persisted M5 card ──────────────────────────────────────
-    if "m5_result" in st.session_state:
-        r5 = st.session_state["m5_result"]
-        st.markdown("""<div class="section-head">
-          <span class="num">⚡</span><h2>Innovation: Capacity Planning</h2><div class="line"></div>
-        </div>""", unsafe_allow_html=True)
-        st.markdown(f"""<div class="gcard" style="border-color:rgba(34,211,238,0.4);">
-            <span class="tag">M5 · LENGTH OF STAY PREDICTOR</span>
-            <h3 style="margin-top:0.5rem;">Predicted Capacity Requirement</h3>
-            <div style="display:flex; align-items:center; gap:20px; margin:1rem 0;">
-                <div class="{r5['css']}" style="flex:1; font-size:1.2rem; padding:20px;">{r5['label']}</div>
-                <div class="stat" style="width:150px;">
-                    <div class="label">CONFIDENCE</div>
-                    <div class="val">{r5['conf']*100:.1f}%</div>
-                </div>
-            </div>
-            <p style="font-size:0.85rem; color:#94a3b8!important;">
-                <strong>Clinical Utility:</strong> This model assists in early discharge planning and
-                bed management by predicting the expected duration of stay upon admission.
-            </p>
-        </div>""", unsafe_allow_html=True)
-
-    # ── Render persisted M4 card ──────────────────────────────────────
-    if "m4_result" in st.session_state:
-        r4 = st.session_state["m4_result"]
-        st.markdown("""<div class="section-head">
-          <span class="num">04</span><h2>NLP Intelligence</h2><div class="line"></div>
-        </div>""", unsafe_allow_html=True)
-        st.markdown(f"""
-        <div class="gcard">
-            <span class="tag">M4 · BioBERT (LoRA)</span>
-            <h3>Clinical Sentiment Analysis</h3>
-            <div class="{r4['css']}" style="margin:1rem 0; padding:15px; font-size:1.1rem; border-radius:10px; text-align:center; font-weight:700;">
-                {r4['label']}
-            </div>
-            <div style="display:flex; gap:8px; margin-top:0.8rem;">
-                <div class="stat" style="flex:1;">
-                    <div class="label">NLP CONFIDENCE</div>
-                    <div class="val">{r4['conf']*100:.1f}%</div>
-                </div>
-            </div>
-            <p style="font-size:0.85rem; color:#94a3b8!important; margin-top:1rem;">
-                <strong>Insight:</strong> {r4['explanation']}
-            </p>
-        </div>""", unsafe_allow_html=True)
-
-        # ── Model 6: Drug Recommendations ────────────────────────────
-        _m6_condition = st.session_state.get("ti_nlp_cond", "")
-        _m6_drug      = st.session_state.get("ti_nlp_drug", "")
-        _m6_recs      = get_m6_recommendations(_m6_condition, _m6_drug)
-
-        if _m6_recs.empty:
-            st.markdown(f"""
-            <div class="gcard" style="margin-top:1rem; opacity:0.7;">
-                <span class="tag">Innovation — Drug Recommendation</span>
-                <p style="color:#64748b; font-size:0.9rem; margin-top:0.75rem;">
-                    ⚠ Insufficient patient review data to recommend alternative drugs for
-                    <strong style="color:#94a3b8;">{_m6_condition}</strong>.
-                    Try a condition such as <em>Depression</em>, <em>Anxiety</em>, or <em>Diabetes, Type 2</em>.
-                </p>
-            </div>""", unsafe_allow_html=True)
-        else:
-            _css = r4.get("css", "risk-low")
-            _drug_name = _m6_drug.strip() if _m6_drug.strip() else "Drug"
-            _cond_name = _m6_condition.strip() if _m6_condition.strip() else "this condition"
-            if _css == "risk-high":
-                _rec_label   = f"{_drug_name} was Ineffective for {_cond_name}"
-                _rec_heading = "Recommended Alternatives Likely to Produce Better Outcomes"
-                _rec_color   = "#ef4444"
-            elif _css == "risk-medium":
-                _rec_label   = f"{_drug_name} was Somewhat Effective for {_cond_name}"
-                _rec_heading = "Drugs That May Produce Better Results for This Condition"
-                _rec_color   = "#f59e0b"
-            else:
-                _rec_label   = f"{_drug_name} was Highly Effective for {_cond_name}"
-                _rec_heading = "Other Drugs That Have Also Shown Strong Results for This Condition"
-                _rec_color   = "#10b981"
-
-            st.markdown(f"""
-            <div class="gcard" style="margin-top:1rem;">
-                <span class="tag">Innovation — Drug Recommendation</span>
-                <h3 style="color:{_rec_color}; margin-bottom:0.25rem;">{_rec_label}</h3>
-                <p style="color:#94a3b8; font-size:0.9rem; margin-bottom:1rem;">{_rec_heading}</p>
-            """, unsafe_allow_html=True)
-
-            for _, row in _m6_recs.iterrows():
-                he_pct  = row["pct_highly_effective"] * 100
-                se_pct  = row["pct_somewhat_effective"] * 100
-                in_pct  = row["pct_ineffective"] * 100
-                reviews = int(row["total_reviews"])
-                rank    = int(row["rank"])
-                st.markdown(f"""
-                <div style="background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08);
-                            border-radius:10px; padding:0.75rem 1rem; margin-bottom:0.5rem;">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.4rem;">
-                        <span style="font-family:'JetBrains Mono'; font-weight:700; font-size:0.95rem; color:#e2e8f0;">
-                            #{rank} &nbsp; {row['urlDrugName']}
-                        </span>
-                        <span style="font-size:0.75rem; color:#64748b;">{reviews:,} reviews</span>
-                    </div>
-                    <div style="display:flex; gap:1rem; font-size:0.8rem;">
-                        <span style="color:#10b981;">✔ Highly Effective: {he_pct:.1f}%</span>
-                        <span style="color:#f59e0b;">~ Somewhat: {se_pct:.1f}%</span>
-                        <span style="color:#ef4444;">✗ Ineffective: {in_pct:.1f}%</span>
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
-
-            st.markdown("</div>", unsafe_allow_html=True)
-
-    # ── Render persisted Consensus section ───────────────────────────
-    if "_syn_p1" in st.session_state:
-        _p1   = st.session_state["_syn_p1"]
-        _p2   = st.session_state["_syn_p2"]
-        _pred1 = st.session_state.get("_con_pred1")
-        _pred2 = st.session_state.get("_con_pred2")
-        _lat1  = st.session_state.get("_con_lat1", 0)
-        _lat2  = st.session_state.get("_con_lat2", 0)
-        _agreement       = "AGREE" if _pred1 == _pred2 else "DISAGREE"
-        _agreement_color = "#5eead4" if _agreement == "AGREE" else "#fbbf24"
-        _avg_proba       = (_p1 + _p2) / 2
-        _high = max(_p1, _p2)
-        if _high >= 0.65:
-            _rec       = ("⚠ Recommend enhanced discharge planning, scheduled "
-                          "follow-up within 7 days, and medication reconciliation.")
-            _rec_color = "#fca5a5"
-        elif _high >= 0.40:
-            _rec       = ("⚡ Standard discharge with phone follow-up within 14 days. "
-                          "Monitor for medication adherence.")
-            _rec_color = "#fcd34d"
-        else:
-            _rec       = "✓ Standard discharge protocol. Routine follow-up sufficient."
-            _rec_color = "#5eead4"
-
-        st.markdown("""
-        <div class="section-head">
-          <span class="num">⊕</span><h2>Consensus</h2><div class="line"></div>
-        </div>""", unsafe_allow_html=True)
-        cc1, cc2, cc3, cc4 = st.columns(4)
-        cc1.markdown(f"""
-        <div class="stat">
-          <div class="label">MODEL AGREEMENT</div>
-          <div class="val" style="color:{_agreement_color};">{_agreement}</div>
-          <div class="delta">consensus check</div>
-        </div>""", unsafe_allow_html=True)
-        cc2.markdown(f"""
-        <div class="stat">
-          <div class="label">AVG PROBABILITY</div>
-          <div class="val">{_avg_proba*100:.1f}%</div>
-          <div class="delta">M1 + M2 average</div>
-        </div>""", unsafe_allow_html=True)
-        cc3.markdown(f"""
-        <div class="stat">
-          <div class="label">DELTA M1 ↔ M2</div>
-          <div class="val">{abs(_p1-_p2)*100:.1f}pp</div>
-          <div class="delta">disagreement gap</div>
-        </div>""", unsafe_allow_html=True)
-        cc4.markdown(f"""
-        <div class="stat">
-          <div class="label">TOTAL LATENCY</div>
-          <div class="val">{(_lat1+_lat2):.0f}ms</div>
-          <div class="delta">end-to-end</div>
-        </div>""", unsafe_allow_html=True)
-        st.markdown(f"""
-        <div class="gcard" style="border-color:rgba(94,234,212,0.3); margin-top:1rem;">
-          <span class="tag">CLINICAL RECOMMENDATION</span>
-          <p style="color:{_rec_color}!important; font-size:1rem;
-                    margin-top:0.5rem; line-height:1.6; font-weight:500;">{_rec}</p>
-        </div>""", unsafe_allow_html=True)
-
-    # ── AI Clinical Synthesis — outside if submitted so button survives re-runs ──
-    if "_syn_p1" in st.session_state:
-        st.markdown("""
-        <div class="section-head">
-          <span class="num">🧠</span><h2>AI Clinical Synthesis</h2><div class="line"></div>
-        </div>""", unsafe_allow_html=True)
-
-        st.markdown("""
-        <p style="font-size:0.82rem; color:#64748b; margin-bottom:0.8rem;
-                  font-family:'JetBrains Mono',monospace; letter-spacing:0.03em;">
-            POWERED BY LLAMA 3.1 · GROQ · GENERATIVE AI CONSENSUS REPORT
-        </p>""", unsafe_allow_html=True)
-
-        if st.button("⚕️ Generate AI Clinical Consensus Report"):
-            with st.spinner("Synthesizing multi-model diagnostics with Llama AI..."):
-                st.session_state["synthesis_result"] = generate_clinical_synthesis(
-                    m1_proba=st.session_state["_syn_p1"],
-                    m2_proba=st.session_state["_syn_p2"],
-                    m5_label=st.session_state["_syn_m5"],
-                    m4_label=st.session_state["_syn_m4_label"],
-                    m4_explanation=st.session_state["_syn_m4_expl"],
+        # ── TAB 1: Readmission Risk (M1 & M2) + Consensus ──────────
+        with _tab1:
+            if "m1_result" in st.session_state or "m2_result" in st.session_state:
+                st.markdown("""
+                <div class="section-head">
+                  <span class="num">🎯</span><h2>Inference Results</h2><div class="line"></div>
+                </div>""", unsafe_allow_html=True)
+                st.markdown(
+                    "<p style='color:#94a3b8; font-size:0.95rem; margin:-0.5rem 0 1.2rem;'>"
+                    "🎯 <b>Clinical Metric:</b> Probability of unplanned hospital readmission "
+                    "within <b>30 days</b> of discharge.</p>",
+                    unsafe_allow_html=True,
                 )
+                col_m1, col_m2 = st.columns(2, gap="large")
+                with col_m1:
+                    if "m1_result" in st.session_state:
+                        r = st.session_state["m1_result"]
+                        st.markdown(get_gauge_html(r["proba"], "M1 · XGBOOST ENSEMBLE", r["latency"], threshold=0.38), unsafe_allow_html=True)
+                with col_m2:
+                    if "m2_result" in st.session_state:
+                        r = st.session_state["m2_result"]
+                        st.markdown(get_gauge_html(r["proba"], "M2 · DEEP LEARNING DNN", r["latency"], threshold=0.38), unsafe_allow_html=True)
+            if "_syn_p1" in st.session_state:
+                _p1   = st.session_state["_syn_p1"]
+                _p2   = st.session_state["_syn_p2"]
+                _pred1 = st.session_state.get("_con_pred1")
+                _pred2 = st.session_state.get("_con_pred2")
+                _lat1  = st.session_state.get("_con_lat1", 0)
+                _lat2  = st.session_state.get("_con_lat2", 0)
+                _agreement       = "AGREE" if _pred1 == _pred2 else "DISAGREE"
+                _agreement_color = "#5eead4" if _agreement == "AGREE" else "#fbbf24"
+                _avg_proba       = (_p1 + _p2) / 2
+                _high = max(_p1, _p2)
+                if _high >= 0.65:
+                    _rec       = ("⚠ Recommend enhanced discharge planning, scheduled "
+                                  "follow-up within 7 days, and medication reconciliation.")
+                    _rec_color = "#fca5a5"
+                elif _high >= 0.40:
+                    _rec       = ("⚡ Standard discharge with phone follow-up within 14 days. "
+                                  "Monitor for medication adherence.")
+                    _rec_color = "#fcd34d"
+                else:
+                    _rec       = "✓ Standard discharge protocol. Routine follow-up sufficient."
+                    _rec_color = "#5eead4"
 
-        if "synthesis_result" in st.session_state:
-            synthesis = st.session_state["synthesis_result"]
-            st.markdown(f"""
-            <div style="
-                background: linear-gradient(135deg, rgba(15,30,52,0.8) 0%, rgba(17,44,74,0.8) 100%);
-                border: 1px solid rgba(94,234,212,0.35);
-                border-radius: 14px;
-                padding: 1.8rem 2rem;
-                box-shadow: 0 8px 32px rgba(34,211,238,0.08), inset 0 1px 0 rgba(94,234,212,0.1);
-                margin-top: 0.5rem;
-            ">
-                <div style="display:flex; align-items:center; gap:10px; margin-bottom:1.2rem;">
-                    <span style="font-size:1.3rem;">🧠</span>
-                    <span style="font-family:'JetBrains Mono',monospace; font-size:0.7rem;
-                                 font-weight:700; color:#5eead4; text-transform:uppercase;
-                                 letter-spacing:0.12em;">
-                        AI CLINICAL SYNTHESIS · LLAMA 3.1 via GROQ
-                    </span>
-                </div>
-                <div style="font-size:0.93rem; color:#e2e8f0; line-height:1.75;
-                            white-space:pre-wrap; font-family:'Inter',sans-serif;">
+                st.markdown("""
+                <div class="section-head">
+                  <span class="num">⊕</span><h2>Consensus</h2><div class="line"></div>
+                </div>""", unsafe_allow_html=True)
+                cc1, cc2, cc3, cc4 = st.columns(4)
+                cc1.markdown(f"""
+                <div class="stat">
+                  <div class="label">MODEL AGREEMENT</div>
+                  <div class="val" style="color:{_agreement_color};">{_agreement}</div>
+                  <div class="delta">consensus check</div>
+                </div>""", unsafe_allow_html=True)
+                cc2.markdown(f"""
+                <div class="stat">
+                  <div class="label">AVG PROBABILITY</div>
+                  <div class="val">{_avg_proba*100:.1f}%</div>
+                  <div class="delta">M1 + M2 average</div>
+                </div>""", unsafe_allow_html=True)
+                cc3.markdown(f"""
+                <div class="stat">
+                  <div class="label">DELTA M1 ↔ M2</div>
+                  <div class="val">{abs(_p1-_p2)*100:.1f}pp</div>
+                  <div class="delta">disagreement gap</div>
+                </div>""", unsafe_allow_html=True)
+                cc4.markdown(f"""
+                <div class="stat">
+                  <div class="label">TOTAL LATENCY</div>
+                  <div class="val">{(_lat1+_lat2):.0f}ms</div>
+                  <div class="delta">end-to-end</div>
+                </div>""", unsafe_allow_html=True)
+                st.markdown(f"""
+                <div class="gcard" style="border-color:rgba(94,234,212,0.3); margin-top:1rem;">
+                  <span class="tag">CLINICAL RECOMMENDATION</span>
+                  <p style="color:{_rec_color}!important; font-size:1rem;
+                            margin-top:0.5rem; line-height:1.6; font-weight:500;">{_rec}</p>
+                </div>""", unsafe_allow_html=True)
+
+        # ── TAB 2: Clinical Notes (M4) + AI Clinical Synthesis ───────
+        with _tab2:
+            if "m4_result" in st.session_state:
+                r4 = st.session_state["m4_result"]
+                st.markdown("""<div class="section-head">
+                  <span class="num">04</span><h2>NLP Intelligence</h2><div class="line"></div>
+                </div>""", unsafe_allow_html=True)
+                st.markdown(f"""
+                <div class="gcard">
+                    <span class="tag">M4 · BioBERT (LoRA)</span>
+                    <h3>Clinical Sentiment Analysis</h3>
+                    <div class="{r4['css']}" style="margin:1rem 0; padding:15px; font-size:1.1rem; border-radius:10px; text-align:center; font-weight:700;">
+                        {r4['label']}
+                    </div>
+                    <div style="display:flex; gap:8px; margin-top:0.8rem;">
+                        <div class="stat" style="flex:1;">
+                            <div class="label">NLP CONFIDENCE</div>
+                            <div class="val">{r4['conf']*100:.1f}%</div>
+                        </div>
+                    </div>
+                    <p style="font-size:0.85rem; color:#94a3b8!important; margin-top:1rem;">
+                        <strong>Insight:</strong> {r4['explanation']}
+                    </p>
+                </div>""", unsafe_allow_html=True)
+            if "_syn_p1" in st.session_state:
+                st.markdown("""
+                <div class="section-head">
+                  <span class="num">🧠</span><h2>AI Clinical Synthesis</h2><div class="line"></div>
+                </div>""", unsafe_allow_html=True)
+
+                st.markdown("""
+                <p style="font-size:0.82rem; color:#64748b; margin-bottom:0.8rem;
+                          font-family:'JetBrains Mono',monospace; letter-spacing:0.03em;">
+                    POWERED BY LLAMA 3.1 · GROQ · GENERATIVE AI CONSENSUS REPORT
+                </p>""", unsafe_allow_html=True)
+
+                if st.button("⚕️ Generate AI Clinical Consensus Report"):
+                    with st.spinner("Synthesizing multi-model diagnostics with Llama AI..."):
+                        st.session_state["synthesis_result"] = generate_clinical_synthesis(
+                            m1_proba=st.session_state["_syn_p1"],
+                            m2_proba=st.session_state["_syn_p2"],
+                            m5_label=st.session_state["_syn_m5"],
+                            m4_label=st.session_state["_syn_m4_label"],
+                            m4_explanation=st.session_state["_syn_m4_expl"],
+                        )
+
+                if "synthesis_result" in st.session_state:
+                    synthesis = st.session_state["synthesis_result"]
+                    st.markdown(f"""
+                    <div style="
+                        background: linear-gradient(135deg, rgba(15,30,52,0.8) 0%, rgba(17,44,74,0.8) 100%);
+                        border: 1px solid rgba(94,234,212,0.35);
+                        border-radius: 14px;
+                        padding: 1.8rem 2rem;
+                        box-shadow: 0 8px 32px rgba(34,211,238,0.08), inset 0 1px 0 rgba(94,234,212,0.1);
+                        margin-top: 0.5rem;
+                    ">
+                        <div style="display:flex; align-items:center; gap:10px; margin-bottom:1.2rem;">
+                            <span style="font-size:1.3rem;">🧠</span>
+                            <span style="font-family:'JetBrains Mono',monospace; font-size:0.7rem;
+                                         font-weight:700; color:#5eead4; text-transform:uppercase;
+                                         letter-spacing:0.12em;">
+                                AI CLINICAL SYNTHESIS · LLAMA 3.1 via GROQ
+                            </span>
+                        </div>
+                        <div style="font-size:0.93rem; color:#e2e8f0; line-height:1.75;
+                                    white-space:pre-wrap; font-family:'Inter',sans-serif;">
 {synthesis}
-                </div>
-                <div style="margin-top:1.2rem; padding-top:1rem;
-                            border-top:1px solid rgba(94,234,212,0.1);
-                            font-size:0.72rem; color:#475569;
-                            font-family:'JetBrains Mono',monospace;">
-                    ⚠ AI-GENERATED SYNTHESIS · FOR INVESTIGATIONAL USE ONLY · NOT A CLINICAL DIAGNOSIS
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-            if st.button("🗑️ Clear Synthesis"):
-                del st.session_state["synthesis_result"]
-                st.rerun()
+                        </div>
+                        <div style="margin-top:1.2rem; padding-top:1rem;
+                                    border-top:1px solid rgba(94,234,212,0.1);
+                                    font-size:0.72rem; color:#475569;
+                                    font-family:'JetBrains Mono',monospace;">
+                            ⚠ AI-GENERATED SYNTHESIS · FOR INVESTIGATIONAL USE ONLY · NOT A CLINICAL DIAGNOSIS
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    if st.button("🗑️ Clear Synthesis"):
+                        del st.session_state["synthesis_result"]
+                        st.rerun()
+
+        # ── TAB 3: Capacity & Ops (M5) + Drug Recommendation ─────────
+        with _tab3:
+            if "m5_result" in st.session_state:
+                r5 = st.session_state["m5_result"]
+                st.markdown("""<div class="section-head">
+                  <span class="num">⚡</span><h2>Innovation: Capacity Planning</h2><div class="line"></div>
+                </div>""", unsafe_allow_html=True)
+                st.markdown(f"""<div class="gcard" style="border-color:rgba(34,211,238,0.4);">
+                    <span class="tag">M5 · LENGTH OF STAY PREDICTOR</span>
+                    <h3 style="margin-top:0.5rem;">Predicted Capacity Requirement</h3>
+                    <div style="display:flex; align-items:center; gap:20px; margin:1rem 0;">
+                        <div class="{r5['css']}" style="flex:1; font-size:1.2rem; padding:20px;">{r5['label']}</div>
+                        <div class="stat" style="width:150px;">
+                            <div class="label">CONFIDENCE</div>
+                            <div class="val">{r5['conf']*100:.1f}%</div>
+                        </div>
+                    </div>
+                    <p style="font-size:0.85rem; color:#94a3b8!important;">
+                        <strong>Clinical Utility:</strong> This model assists in early discharge planning and
+                        bed management by predicting the expected duration of stay upon admission.
+                    </p>
+                </div>""", unsafe_allow_html=True)
+            if "m4_result" in st.session_state:
+                r4 = st.session_state["m4_result"]
+                # ── Model 6: Drug Recommendations ────────────────────
+                _m6_condition = st.session_state.get("ti_nlp_cond", "")
+                _m6_drug      = st.session_state.get("ti_nlp_drug", "")
+                _m6_recs      = get_m6_recommendations(_m6_condition, _m6_drug)
+
+                if _m6_recs.empty:
+                    st.markdown(f"""
+                    <div class="gcard" style="margin-top:1rem; opacity:0.7;">
+                        <span class="tag">Innovation — Drug Recommendation</span>
+                        <p style="color:#64748b; font-size:0.9rem; margin-top:0.75rem;">
+                            ⚠ Insufficient patient review data to recommend alternative drugs for
+                            <strong style="color:#94a3b8;">{_m6_condition}</strong>.
+                            Try a condition such as <em>Depression</em>, <em>Anxiety</em>, or <em>Diabetes, Type 2</em>.
+                        </p>
+                    </div>""", unsafe_allow_html=True)
+                else:
+                    _css = r4.get("css", "risk-low")
+                    _drug_name = _m6_drug.strip() if _m6_drug.strip() else "Drug"
+                    _cond_name = _m6_condition.strip() if _m6_condition.strip() else "this condition"
+                    if _css == "risk-high":
+                        _rec_label   = f"{_drug_name} was Ineffective for {_cond_name}"
+                        _rec_heading = "Recommended Alternatives Likely to Produce Better Outcomes"
+                        _rec_color   = "#ef4444"
+                    elif _css == "risk-medium":
+                        _rec_label   = f"{_drug_name} was Somewhat Effective for {_cond_name}"
+                        _rec_heading = "Drugs That May Produce Better Results for This Condition"
+                        _rec_color   = "#f59e0b"
+                    else:
+                        _rec_label   = f"{_drug_name} was Highly Effective for {_cond_name}"
+                        _rec_heading = "Other Drugs That Have Also Shown Strong Results for This Condition"
+                        _rec_color   = "#10b981"
+
+                    st.markdown(f"""
+                    <div class="gcard" style="margin-top:1rem;">
+                        <span class="tag">Innovation — Drug Recommendation</span>
+                        <h3 style="color:{_rec_color}; margin-bottom:0.25rem;">{_rec_label}</h3>
+                        <p style="color:#94a3b8; font-size:0.9rem; margin-bottom:1rem;">{_rec_heading}</p>
+                    """, unsafe_allow_html=True)
+
+                    for _, row in _m6_recs.iterrows():
+                        he_pct  = row["pct_highly_effective"] * 100
+                        se_pct  = row["pct_somewhat_effective"] * 100
+                        in_pct  = row["pct_ineffective"] * 100
+                        reviews = int(row["total_reviews"])
+                        rank    = int(row["rank"])
+                        st.markdown(f"""
+                        <div style="background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08);
+                                    border-radius:10px; padding:0.75rem 1rem; margin-bottom:0.5rem;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.4rem;">
+                                <span style="font-family:'JetBrains Mono'; font-weight:700; font-size:0.95rem; color:#e2e8f0;">
+                                    #{rank} &nbsp; {row['urlDrugName']}
+                                </span>
+                                <span style="font-size:0.75rem; color:#64748b;">{reviews:,} reviews</span>
+                            </div>
+                            <div style="display:flex; gap:1rem; font-size:0.8rem;">
+                                <span style="color:#10b981;">✔ Highly Effective: {he_pct:.1f}%</span>
+                                <span style="color:#f59e0b;">~ Somewhat: {se_pct:.1f}%</span>
+                                <span style="color:#ef4444;">✗ Ineffective: {in_pct:.1f}%</span>
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
+
+                    st.markdown("</div>", unsafe_allow_html=True)
 
     # ── Export Clinical Summary ───────────────────────────────────────────────
     if "_syn_p1" in st.session_state:
