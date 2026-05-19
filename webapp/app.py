@@ -3329,6 +3329,13 @@ def page_predict() -> None:
             st.session_state["_con_lat1"]  = latency_m1
             st.session_state["_con_lat2"]  = latency_m2
 
+        # ── Auto-scroll to results after prediction ───────────────────
+        import streamlit.components.v1 as _stc
+        _stc.html(
+            "<script>window.scrollTo({top: document.body.scrollHeight, behavior:'smooth'});</script>",
+            height=0,
+        )
+
     # ── CSS for gauges — injected always so persisted cards render correctly ──
     st.markdown("""
     <style>
@@ -3427,21 +3434,38 @@ def page_predict() -> None:
         """
 
     # ── Results tabs ─────────────────────────────────────────────────
-    _any_result = (
-        "m1_result" in st.session_state
-        or "m2_result" in st.session_state
-        or "m5_result" in st.session_state
-        or "m4_result" in st.session_state
-    )
-    if _any_result:
-        _tab1, _tab2, _tab3 = st.tabs([
-            "🫀 Readmission Risk (M1 & M2)",
-            "🧪 Clinical Notes (M4)",
-            "🏥 Capacity & Ops (M5)",
-        ])
+    # ── Dynamic tab labels — badge shows once prediction has run ─────
+    if "m1_result" in st.session_state or "m2_result" in st.session_state:
+        _r1_t    = st.session_state.get("m1_result", {})
+        _r2_t    = st.session_state.get("m2_result", {})
+        _n_t     = int(bool(_r1_t)) + int(bool(_r2_t))
+        _avg_p_t = (_r1_t.get("proba", 0) + _r2_t.get("proba", 0)) / max(_n_t, 1)
+        _t1_bdg  = "HIGH ⚠" if _avg_p_t >= 0.60 else ("MODERATE ⚡" if _avg_p_t >= 0.38 else "LOW ✓")
+        _tab1_label = f"🫀 Readmission · {_t1_bdg}"
+    else:
+        _tab1_label = "🫀 Readmission Risk (M1 & M2)"
+
+    if "m4_result" in st.session_state:
+        _tab2_label = f"🧪 Notes · {st.session_state['m4_result']['label']}"
+    else:
+        _tab2_label = "🧪 Clinical Notes (M4)"
+
+    if "m5_result" in st.session_state:
+        _tab3_label = f"🏥 Ops · {st.session_state['m5_result']['label']}"
+    else:
+        _tab3_label = "🏥 Capacity & Ops (M5)"
+
+    if True:  # tabs always visible — placeholders shown before first prediction
+        _tab1, _tab2, _tab3 = st.tabs([_tab1_label, _tab2_label, _tab3_label])
 
         # ── TAB 1: Readmission Risk (M1 & M2) + Consensus ──────────
         with _tab1:
+            if not (
+                "m1_result" in st.session_state
+                or "m2_result" in st.session_state
+                or "_syn_p1" in st.session_state
+            ):
+                st.info("👈 Fill out the patient encounter form and click **⚡ Run Prediction** to see readmission risk results here.")
             if "m1_result" in st.session_state or "m2_result" in st.session_state:
                 st.markdown("""
                 <div class="section-head">
@@ -3523,6 +3547,8 @@ def page_predict() -> None:
 
         # ── TAB 2: Clinical Notes (M4) + AI Clinical Synthesis ───────
         with _tab2:
+            if not ("m4_result" in st.session_state or "_syn_p1" in st.session_state):
+                st.info("👈 Fill out the patient encounter form and click **⚡ Run Prediction** to see clinical notes analysis here.")
             if "m4_result" in st.session_state:
                 r4 = st.session_state["m4_result"]
                 st.markdown("""<div class="section-head">
@@ -3604,6 +3630,8 @@ def page_predict() -> None:
 
         # ── TAB 3: Capacity & Ops (M5) + Drug Recommendation ─────────
         with _tab3:
+            if not ("m5_result" in st.session_state or "m4_result" in st.session_state):
+                st.info("👈 Fill out the patient encounter form and click **⚡ Run Prediction** to see capacity & operations results here.")
             if "m5_result" in st.session_state:
                 r5 = st.session_state["m5_result"]
                 st.markdown("""<div class="section-head">
@@ -4984,16 +5012,22 @@ def page_retinal() -> None:
                         img_preprocessed = resnet_preprocess(img_arr)
                         heatmap = make_gradcam(img_preprocessed, model)
                         overlay = overlay_gradcam(pil_img, heatmap)
-
-                        col_orig, col_cam = st.columns(2)
-                        with col_orig:
-                            st.image(uploaded, caption="Original", use_container_width=True)
-                        with col_cam:
-                            st.image(overlay, caption="Grad-CAM Overlay", use_container_width=True)
-
-                        st.caption("🔴 Red/yellow = high attention regions  |  🔵 Blue = low attention")
+                        import io as _io
+                        _buf = _io.BytesIO()
+                        overlay.save(_buf, format="PNG")
+                        st.session_state["_gradcam_overlay"] = _buf.getvalue()
+                        st.session_state["_gradcam_uploaded"] = uploaded.getvalue()
                     except Exception as e:
                         st.error(f"Grad-CAM failed: {e}")
+                        st.session_state.pop("_gradcam_overlay", None)
+
+            if "_gradcam_overlay" in st.session_state:
+                col_orig, col_cam = st.columns(2)
+                with col_orig:
+                    st.image(st.session_state["_gradcam_uploaded"], caption="Original", use_container_width=True)
+                with col_cam:
+                    st.image(st.session_state["_gradcam_overlay"], caption="Grad-CAM Overlay", use_container_width=True)
+                st.caption("🔴 Red/yellow = high attention regions  |  🔵 Blue = low attention")
 
         # ── TAB 3: AI Clinical Interpretation ────────────────────
         with _tab3:
@@ -5034,9 +5068,12 @@ CRITICAL RULE: YOU MUST ALWAYS END EVERY RESPONSE WITH THIS EXACT TEXT: '\n\n⚠
                         or "_retinal_chat_history" not in st.session_state):
                     st.session_state._retinal_result_key = _result_key
                     st.session_state._retinal_chat_history = []
+                    # New scan loaded — allow auto-init to run
+                    st.session_state["_retinal_skip_init"] = False
 
                 # Auto-generate initial narrative on first load
-                if not st.session_state._retinal_chat_history:
+                # Skip if the user just manually cleared the conversation
+                if not st.session_state._retinal_chat_history and not st.session_state.get("_retinal_skip_init"):
                     with st.spinner("Generating clinical interpretation..."):
                         try:
                             _init_resp = _ai_client.chat.completions.create(
@@ -5134,6 +5171,7 @@ CRITICAL RULE: YOU MUST ALWAYS END EVERY RESPONSE WITH THIS EXACT TEXT: '\n\n⚠
 
                 if st.button("🗑️ Clear Conversation", key="clear_retinal_chat"):
                     st.session_state._retinal_chat_history = []
+                    st.session_state["_retinal_skip_init"] = True
                     st.rerun()
 # =============================================================================
 # MAIN ROUTER
