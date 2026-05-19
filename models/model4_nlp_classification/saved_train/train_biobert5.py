@@ -50,7 +50,7 @@ from tqdm import tqdm
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from pipelines.data_pipeline_wes import (load_raw_data, clean_data, engineer_features,
+from pipelines.data_pipeline import (load_raw_data, clean_nlp_data, engineer_nlp_features,
                                           save_processed_data, load_processed_data)
 
 PROCESSED_FILE  = "medication_feedback_processed.csv"
@@ -145,8 +145,8 @@ def load_data() -> pd.DataFrame:
     if not (PROCESSED_DIR / PROCESSED_FILE).exists():
         print("Processed data not found — generating from raw...")
         df = load_raw_data("patient_medication_feedback.csv")
-        df = clean_data(df)
-        df = engineer_features(df)
+        df = clean_nlp_data(df)
+        df = engineer_nlp_features(df)
         cols = ["condition", "urlDrugName", "effectiveness_3class",
                 "benefitsReview", "review_text_clean",
                 "review_word_count", "review_char_count"]

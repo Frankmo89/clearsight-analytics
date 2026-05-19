@@ -45,7 +45,7 @@ from sklearn.metrics import classification_report, f1_score
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from pipelines.data_pipeline_wes import load_raw_data, clean_data, engineer_features
+from pipelines.data_pipeline import load_raw_data, clean_nlp_data, engineer_nlp_features
 
 MODEL_DIR    = PROJECT_ROOT / "models" / "model4_nlp_classification" / "saved_model"
 BIOBERT_NAME = "dmis-lab/biobert-base-cased-v1.2"
@@ -285,8 +285,8 @@ def main():
 
     # ── Load data (same pipeline as train_biobert5.py) ────────────────────────
     df = load_raw_data("patient_medication_feedback.csv")
-    df = clean_data(df)
-    df = engineer_features(df)
+    df = clean_nlp_data(df)
+    df = engineer_nlp_features(df)
 
     target_le = LabelEncoder()
     y = target_le.fit_transform(df["effectiveness_3class"])

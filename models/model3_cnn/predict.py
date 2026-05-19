@@ -82,7 +82,7 @@ def main():
     VALID_EXTENSIONS  = {".png", ".jpg", ".jpeg"}
 
     image_paths = {
-        img_path.name: img_path
+        img_path.stem: img_path
         for img_path in sorted(test_image_dir.glob("*.*"))
         if img_path.suffix.lower() in VALID_EXTENSIONS
     }

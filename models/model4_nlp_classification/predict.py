@@ -21,7 +21,7 @@ from huggingface_hub import hf_hub_download
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from pipelines.data_pipeline_wes import load_raw_data, clean_data, engineer_features
+from pipelines.data_pipeline import load_raw_data, clean_nlp_data, engineer_nlp_features
 
 HF_REPO = "whoukcode/finalcapstone"
 
@@ -339,8 +339,8 @@ def main():
     bundle = load_model()
 
     df = load_raw_data("patient_medication_feedback.csv")
-    df = clean_data(df)
-    df = engineer_features(df)
+    df = clean_nlp_data(df)
+    df = engineer_nlp_features(df)
 
     results = predict(bundle, df)
 

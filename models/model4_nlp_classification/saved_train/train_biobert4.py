@@ -51,7 +51,7 @@ from tqdm import tqdm
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from pipelines.data_pipeline_wes import load_raw_data, clean_data, engineer_features
+from pipelines.data_pipeline import load_raw_data, clean_nlp_data, engineer_nlp_features
 
 SAVED_MODEL_DIR = PROJECT_ROOT / "models" / "model4_nlp_classification" / "saved_model"
 TARGET_COL      = "effectiveness_3class"
@@ -139,8 +139,8 @@ class BioBERTMetadataClassifier(nn.Module):
 
 def load_data() -> pd.DataFrame:
     df = load_raw_data("patient_medication_feedback.csv")
-    df = clean_data(df)
-    df = engineer_features(df)
+    df = clean_nlp_data(df)
+    df = engineer_nlp_features(df)
     return df
 
 

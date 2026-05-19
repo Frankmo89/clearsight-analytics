@@ -12,6 +12,7 @@ import numpy as np
 from pathlib import Path
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
+from pipelines.preprocessing_hints import create_medication_categories, preprocess_review_text
 
 # Project paths
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -509,3 +510,98 @@ def prepare_test_data(filepath: str, preprocessing_state: dict):
 
     print(f"Test data prepared: {len(df)} rows, {len(df.columns)} columns")
     return df, ids
+
+
+# =============================================================================
+# NLP PIPELINE — Model 4 (Wes)
+# Handles the patient medication review text dataset.
+# =============================================================================
+
+def load_raw_data(filename: str) -> pd.DataFrame:
+    """Load a raw CSV file from data/raw/.
+
+    Args:
+        filename: Name of the CSV file (e.g., "patient_medication_feedback.csv")
+
+    Returns:
+        pandas DataFrame
+    """
+    filepath = RAW_DATA_DIR / filename
+    if not filepath.exists():
+        raise FileNotFoundError(
+            f"Data file not found: {filepath}\n"
+            f"Make sure you've downloaded the data to data/raw/"
+        )
+    df = pd.read_csv(filepath)
+    print(f"Loaded {len(df)} rows from {filename}")
+    return df
+
+
+def clean_nlp_data(df: pd.DataFrame) -> pd.DataFrame:
+    """Clean the patient medication feedback dataset.
+
+    - Drops rows missing the review text or target label
+    - Removes rows where the review text is empty/whitespace
+    - Resets the index
+
+    Returns:
+        Cleaned DataFrame
+    """
+    target_col = "effectiveness_3class"
+    text_col = "benefitsReview"
+
+    df = df.dropna(subset=[text_col, target_col])
+    df = df[df[text_col].str.strip().str.len() > 0]
+    df = df.reset_index(drop=True)
+
+    print(f"After cleaning: {len(df)} rows")
+    print(df[target_col].value_counts())
+    return df
+
+
+def engineer_nlp_features(df: pd.DataFrame) -> pd.DataFrame:
+    """Add derived features useful for analysis alongside the NLP model.
+
+    - review_word_count: number of words in the review
+    - review_char_count: number of characters in the review
+    - review_text_clean: LSTM-ready text (lowercase, letters only, no punctuation/numbers)
+                         benefitsReview is kept raw for BioBERT
+
+    Returns:
+        DataFrame with added feature columns
+    """
+    df["review_word_count"] = df["benefitsReview"].str.split().str.len()
+    df["review_char_count"] = df["benefitsReview"].str.len()
+    df["review_text_clean"] = df["benefitsReview"].apply(preprocess_review_text)
+    return df
+
+
+def save_processed_data(df: pd.DataFrame, filename: str) -> None:
+    """Save processed data to data/processed/.
+
+    Args:
+        df: Processed DataFrame
+        filename: Output filename (e.g., "nlp_processed.csv")
+    """
+    PROCESSED_DATA_DIR.mkdir(parents=True, exist_ok=True)
+    output_path = PROCESSED_DATA_DIR / filename
+    df.to_csv(output_path, index=False)
+    print(f"Saved processed data to {output_path}")
+
+
+def load_processed_data(filename: str) -> pd.DataFrame:
+    """Load previously processed data from data/processed/.
+
+    Args:
+        filename: Name of the processed CSV file
+
+    Returns:
+        pandas DataFrame
+    """
+    filepath = PROCESSED_DATA_DIR / filename
+    if not filepath.exists():
+        raise FileNotFoundError(
+            f"Processed data not found: {filepath}\n"
+            f"Run the data pipeline first to generate processed data."
+        )
+    return pd.read_csv(filepath)
