@@ -14,6 +14,8 @@ My focus was bridging the gap between raw algorithmic performance and actual cli
 
 Healthcare cannot afford "Black Box" mistakes; if an algorithm hallucinates, patient safety is compromised. Instead of relying on a single algorithm, I designed a **Dual-Model Consensus Architecture** to evaluate patient risk from two fundamentally different mathematical perspectives.
 
+<img width="900" height="1040" alt="consensus-architecture" src="https://github.com/user-attachments/assets/222945a2-9ca4-4375-8b0a-ad9af3e49786" />
+
 ### Shared Data Pipeline (`pipelines/data_pipeline.py`)
 
 Both models consume a single, rigorously engineered shared pipeline. Key decisions I made at this layer:
