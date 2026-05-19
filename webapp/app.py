@@ -690,6 +690,47 @@ section[data-testid="stMain"]::-webkit-scrollbar-thumb:hover {
 # =============================================================================
 # MODEL LOADERS  (cached)
 # =============================================================================
+_HF_REPO = "whoukcode/finalcapstone"
+
+
+def _ensure_hf_artifact(local_path: Path, hf_filename: str) -> None:
+    """Download a model artifact from HuggingFace if it is not present locally.
+
+    Uses the same repo (whoukcode/finalcapstone) and hf_hub_download pattern
+    as load_model4() and load_m6_rankings(). Safe to call from inside
+    @st.cache_resource functions — the download is a one-time operation.
+
+    Args:
+        local_path: Expected local path of the artifact (e.g. M1_DIR / "model.joblib").
+        hf_filename: Filename as stored in the HuggingFace repo (e.g. "m1_model.joblib").
+
+    Raises:
+        RuntimeError: If the file is absent locally and cannot be downloaded.
+    """
+    if local_path.exists():
+        return
+    logger.info("%s not found locally — downloading from HuggingFace...", local_path.name)
+    try:
+        from huggingface_hub import hf_hub_download
+        import shutil
+        local_path.parent.mkdir(parents=True, exist_ok=True)
+        # Download to the HF cache (no local_dir) so nested repo paths like
+        # "model1_traditional_ml/saved_model/model.joblib" don't mirror their
+        # subfolder tree under local_path.parent.
+        dl = hf_hub_download(
+            repo_id=_HF_REPO,
+            filename=hf_filename,
+        )
+        shutil.copy2(dl, str(local_path))
+        logger.info("Downloaded %s from HuggingFace → %s", hf_filename, local_path)
+    except Exception as exc:
+        raise RuntimeError(
+            f"Artifact '{local_path.name}' not found locally and could not be downloaded "
+            f"from HuggingFace ({_HF_REPO}). "
+            f"Upload the file as '{hf_filename}' to the repo and retry. Error: {exc}"
+        ) from exc
+
+
 @st.cache_resource(show_spinner=False)
 def load_model1() -> tuple[Any, dict, list, float]:
     """Loads and caches the Model 1 XGBoost ensemble and its preprocessing artifacts.
@@ -712,6 +753,7 @@ def load_model1() -> tuple[Any, dict, list, float]:
     """
     t0 = time.perf_counter()
     logger.info("Loading Model 1 (XGBoost) artifacts from %s", M1_DIR)
+    _ensure_hf_artifact(M1_DIR / "model.joblib", "model1_traditional_ml/saved_model/model.joblib")
     try:
         model  = joblib.load(M1_DIR / "model.joblib")
         state  = joblib.load(M1_DIR / "preprocessing_state.joblib")
@@ -746,6 +788,7 @@ def load_model2() -> tuple[Any, Any, dict, list]:
     """
     t0 = time.perf_counter()
     logger.info("Loading Model 2 (Keras DNN) artifacts from %s", M2_DIR)
+    _ensure_hf_artifact(M2_DIR / "model.keras", "model2_deep_learning/saved_model/model.keras")
     try:
         import tensorflow as tf
         model  = tf.keras.models.load_model(M2_DIR / "model.keras")
@@ -1112,6 +1155,7 @@ def load_model5() -> tuple[Any, dict, list]:
     M5_DIR = PROJECT_ROOT / "models" / "model5_innovation" / "saved_model"
     t0 = time.perf_counter()
     logger.info("Loading Model 5 (LoS classifier) artifacts from %s", M5_DIR)
+    _ensure_hf_artifact(M5_DIR / "model.joblib", "model5_innovation/saved_model/model.joblib")
     try:
         model = joblib.load(M5_DIR / "model.joblib")
         state = joblib.load(M5_DIR / "preprocessing_state.joblib")
