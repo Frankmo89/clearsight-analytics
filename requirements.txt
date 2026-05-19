@@ -19,7 +19,7 @@ sentence-transformers>=2.2.0
 
 # Image Processing
 Pillow>=10.0.0
-opencv-python>=4.8.0
+opencv-python-headless>=4.8.0
 
 # Explainability
 shap>=0.42.0
