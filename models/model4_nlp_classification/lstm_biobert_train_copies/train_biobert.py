@@ -62,7 +62,7 @@ BIOBERT_MODEL   = "dmis-lab/biobert-base-cased-v1.2"
 MAX_LEN         = 256
 PHASE2_CKPT     = SAVED_MODEL_DIR / "model_biobert_phase2.pt"
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-HF_REPO = "whoukcode/finalcapstone"
+HF_REPO = "FrankAlonsoskyMolina/clearsight-models"
 print(f"Using device: {DEVICE}")
 
 def get_model_file(filename):

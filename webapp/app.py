@@ -690,13 +690,13 @@ section[data-testid="stMain"]::-webkit-scrollbar-thumb:hover {
 # =============================================================================
 # MODEL LOADERS  (cached)
 # =============================================================================
-_HF_REPO = "whoukcode/finalcapstone"
+_HF_REPO = "FrankAlonsoskyMolina/clearsight-models"
 
 
 def _ensure_hf_artifact(local_path: Path, hf_filename: str) -> None:
     """Download a model artifact from HuggingFace if it is not present locally.
 
-    Uses the same repo (whoukcode/finalcapstone) and hf_hub_download pattern
+    Uses the same repo (FrankAlonsoskyMolina/clearsight-models) and hf_hub_download pattern
     as load_model4() and load_m6_rankings(). Safe to call from inside
     @st.cache_resource functions — the download is a one-time operation.
 
@@ -921,7 +921,7 @@ def load_m6_rankings() -> pd.DataFrame:
             from huggingface_hub import hf_hub_download
             logger.info("model6_results.csv not found locally — downloading from HuggingFace...")
             hf_hub_download(
-                repo_id="whoukcode/finalcapstone",
+                repo_id="FrankAlonsoskyMolina/clearsight-models",
                 filename="model6_results.csv",
                 local_dir=str(M6_RESULTS.parent),
             )
@@ -949,7 +949,7 @@ def load_model4() -> tuple[Any, Any, Any, Any, Any]:
     from transformers import AutoTokenizer, AutoModel
     from huggingface_hub import hf_hub_download
 
-    HF_REPO = "whoukcode/finalcapstone"
+    HF_REPO = "FrankAlonsoskyMolina/clearsight-models"
 
     def get_model_file(filename):
         local_path = M4_DIR / filename

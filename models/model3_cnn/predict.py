@@ -10,7 +10,7 @@ MODEL_PATH      = Path(__file__).resolve().parent / "saved_model"
 TEST_DATA_DIR   = PROJECT_ROOT / "test_data"
 OUTPUT_FILE     = TEST_DATA_DIR / "model3_results.csv"
 
-HF_REPO      = "whoukcode/finalcapstone"
+HF_REPO      = "FrankAlonsoskyMolina/clearsight-models"
 HF_SUBFOLDER = "model3_cnn/saved_model"
 
 

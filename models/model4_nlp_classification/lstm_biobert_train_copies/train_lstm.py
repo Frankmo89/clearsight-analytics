@@ -52,7 +52,7 @@ PRETRAINED_CKPT  = SAVED_MODEL_DIR / "model_pretrained.pt"
 PRETRAINED_VOCAB = SAVED_MODEL_DIR / "vocab_pretrained.joblib"
 TARGET_COL       = "effectiveness_3class"
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-HF_REPO = "whoukcode/finalcapstone"
+HF_REPO = "FrankAlonsoskyMolina/clearsight-models"
 print(f"Using device: {DEVICE}")
 
 def get_model_file(filename):

@@ -23,7 +23,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from pipelines.data_pipeline import load_raw_data, clean_nlp_data, engineer_nlp_features
 
-HF_REPO = "whoukcode/finalcapstone"
+HF_REPO = "FrankAlonsoskyMolina/clearsight-models"
 
 # =============================================================================
 # Model Selection
