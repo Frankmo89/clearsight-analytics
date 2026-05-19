@@ -1482,40 +1482,59 @@ def render_sidebar() -> str:
             unsafe_allow_html=True,
         )
 
-        # Checking Model 1
-        try:
-            load_model1()
-            st.markdown('<div class="status-row"><span><span style="color:#10b981; margin-right:5px;">●</span> M1 · XGBoost</span><span class="status-pill pill-online">ONLINE</span></div>', unsafe_allow_html=True)
-        except Exception:
-            logger.error("Sidebar status check: Model 1 unavailable", exc_info=True)
-            st.markdown('<div class="status-row"><span><span style="color:#ef4444; margin-right:5px;">●</span> M1 · XGBoost</span><span class="status-pill pill-error">ERROR</span></div>', unsafe_allow_html=True)
-            
-        # Checking Model 2
-        try:
-            load_model2()
-            st.markdown('<div class="status-row"><span><span style="color:#10b981; margin-right:5px;">●</span> M2 · DNN</span><span class="status-pill pill-online">ONLINE</span></div>', unsafe_allow_html=True)
-        except Exception:
-            logger.error("Sidebar status check: Model 2 unavailable", exc_info=True)
-            st.markdown('<div class="status-row"><span><span style="color:#ef4444; margin-right:5px;">●</span> M2 · DNN</span><span class="status-pill pill-error">ERROR</span></div>', unsafe_allow_html=True)
+        # ── Lazy status: file-existence check only — no model loading at startup ──
+        # Models are loaded on first predict click via @st.cache_resource loaders.
+        # READY  = artifact file present on disk (loads instantly on first predict)
+        # STANDBY = not yet downloaded (auto-downloads from HuggingFace on first predict)
+        def _status_pill(label, dot_color, text, pill_cls):
+            return (
+                f'<div class="status-row"><span>'
+                f'<span style="color:{dot_color}; margin-right:5px;">●</span>'
+                f' {label}</span>'
+                f'<span class="status-pill {pill_cls}">{text}</span></div>'
+            )
 
-        # M3 & M4 (static — no dedicated loader exposed at sidebar level)
-        st.markdown('<div class="status-row"><span><span style="color:#10b981; margin-right:5px;">●</span> M3 · CNN Retina</span><span class="status-pill pill-online">ONLINE</span></div>', unsafe_allow_html=True)
-        st.markdown('<div class="status-row"><span><span style="color:#22c55e; margin-right:5px;">●</span> M4 · NLP Notes</span><span class="status-pill pill-online">ONLINE</span></div>', unsafe_allow_html=True)
+        _m1_ok = (M1_DIR / "model.joblib").exists()
+        st.markdown(_status_pill("M1 · XGBoost",
+                                 "#10b981" if _m1_ok else "#f59e0b",
+                                 "READY" if _m1_ok else "STANDBY",
+                                 "pill-online" if _m1_ok else "pill-pending"),
+                    unsafe_allow_html=True)
 
-        # Checking Model 5
-        try:
-            load_model5()
-            st.markdown('<div class="status-row"><span><span style="color:#10b981; margin-right:5px;">●</span> M5 · Innovation</span><span class="status-pill pill-online">ONLINE</span></div>', unsafe_allow_html=True)
-        except Exception:
-            logger.error("Sidebar status check: Model 5 unavailable", exc_info=True)
-            st.markdown('<div class="status-row"><span><span style="color:#ef4444; margin-right:5px;">●</span> M5 · Innovation</span><span class="status-pill pill-error">ERROR</span></div>', unsafe_allow_html=True)
+        _m2_ok = (M2_DIR / "model.keras").exists()
+        st.markdown(_status_pill("M2 · DNN",
+                                 "#10b981" if _m2_ok else "#f59e0b",
+                                 "READY" if _m2_ok else "STANDBY",
+                                 "pill-online" if _m2_ok else "pill-pending"),
+                    unsafe_allow_html=True)
 
-        # Drug Recommendation (Model 6) — calling load_m6_rankings() triggers HF download if needed
-        _m6_status = load_m6_rankings()
-        if not _m6_status.empty:
-            st.markdown('<div class="status-row"><span><span style="color:#10b981; margin-right:5px;">●</span> Drug Recommendation</span><span class="status-pill pill-online">ONLINE</span></div>', unsafe_allow_html=True)
-        else:
-            st.markdown('<div class="status-row"><span><span style="color:#ef4444; margin-right:5px;">●</span> Drug Recommendation</span><span class="status-pill pill-error">OFFLINE</span></div>', unsafe_allow_html=True)
+        _m3_ok = (M3_DIR / "best_model.keras").exists() or (M3_DIR / "model.keras").exists()
+        st.markdown(_status_pill("M3 · CNN Retina",
+                                 "#10b981" if _m3_ok else "#f59e0b",
+                                 "READY" if _m3_ok else "STANDBY",
+                                 "pill-online" if _m3_ok else "pill-pending"),
+                    unsafe_allow_html=True)
+
+        _m4_ok = (M4_DIR / "model_biobert_lora_all_combos.pt").exists()
+        st.markdown(_status_pill("M4 · NLP Notes",
+                                 "#10b981" if _m4_ok else "#f59e0b",
+                                 "READY" if _m4_ok else "STANDBY",
+                                 "pill-online" if _m4_ok else "pill-pending"),
+                    unsafe_allow_html=True)
+
+        _m5_ok = (M5_DIR / "model.joblib").exists()
+        st.markdown(_status_pill("M5 · Innovation",
+                                 "#10b981" if _m5_ok else "#f59e0b",
+                                 "READY" if _m5_ok else "STANDBY",
+                                 "pill-online" if _m5_ok else "pill-pending"),
+                    unsafe_allow_html=True)
+
+        _m6_ok = M6_RESULTS.exists()
+        st.markdown(_status_pill("Drug Recommendation",
+                                 "#10b981" if _m6_ok else "#f59e0b",
+                                 "READY" if _m6_ok else "STANDBY",
+                                 "pill-online" if _m6_ok else "pill-pending"),
+                    unsafe_allow_html=True)
 
         # AI Copilot entry
         st.markdown(
