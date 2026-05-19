@@ -754,6 +754,7 @@ def load_model1() -> tuple[Any, dict, list, float]:
     t0 = time.perf_counter()
     logger.info("Loading Model 1 (XGBoost) artifacts from %s", M1_DIR)
     _ensure_hf_artifact(M1_DIR / "model.joblib", "model1_traditional_ml/saved_model/model.joblib")
+    _ensure_hf_artifact(M1_DIR / "preprocessing_state.joblib", "model1_traditional_ml/saved_model/preprocessing_state.joblib")
     try:
         model  = joblib.load(M1_DIR / "model.joblib")
         state  = joblib.load(M1_DIR / "preprocessing_state.joblib")
@@ -1156,6 +1157,7 @@ def load_model5() -> tuple[Any, dict, list]:
     t0 = time.perf_counter()
     logger.info("Loading Model 5 (LoS classifier) artifacts from %s", M5_DIR)
     _ensure_hf_artifact(M5_DIR / "model.joblib", "model5_innovation/saved_model/model.joblib")
+    _ensure_hf_artifact(M5_DIR / "preprocessing_state.joblib", "model5_innovation/saved_model/preprocessing_state.joblib")
     try:
         model = joblib.load(M5_DIR / "model.joblib")
         state = joblib.load(M5_DIR / "preprocessing_state.joblib")
