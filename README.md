@@ -16,6 +16,8 @@
 > ⚠️ **This is an academic Capstone Project.** It is not a certified medical device and must not be used for real clinical diagnosis.
 
 ---
+> 🙋‍♂️ **Recruiters & Hiring Managers:** This was a collaborative team project. If you are evaluating my individual technical skills, please see my **[PORTFOLIO.md](./PORTFOLIO.md)** for a deep dive into my specific contributions (Consensus Architecture, Model 5, and the Streamlit UI/UX).
+---
 
 ## ✨ Key Features
 
@@ -134,8 +136,8 @@ final-capstone-clearsight-analytics/
 
 ```bash
 # 1. Clone
-git clone https://github.com/fsa-aiml-2511/final-capstone-clearsight-analytics.git
-cd final-capstone-clearsight-analytics
+git clone https://github.com/Frankmo89/clearsight-analytics.git
+cd clearsight-analytics
 
 # 2. Create and activate virtual environment
 python -m venv venv
