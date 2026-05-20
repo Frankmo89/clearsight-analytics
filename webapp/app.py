@@ -755,6 +755,8 @@ def load_model1() -> tuple[Any, dict, list, float]:
     logger.info("Loading Model 1 (XGBoost) artifacts from %s", M1_DIR)
     _ensure_hf_artifact(M1_DIR / "model.joblib", "model1_traditional_ml/saved_model/model.joblib")
     _ensure_hf_artifact(M1_DIR / "preprocessing_state.joblib", "model1_traditional_ml/saved_model/preprocessing_state.joblib")
+    _ensure_hf_artifact(M1_DIR / "feature_names.joblib", "model1_traditional_ml/saved_model/feature_names.joblib")
+    _ensure_hf_artifact(M1_DIR / "optimal_threshold.joblib", "model1_traditional_ml/saved_model/optimal_threshold.joblib")
     try:
         model  = joblib.load(M1_DIR / "model.joblib")
         state  = joblib.load(M1_DIR / "preprocessing_state.joblib")
@@ -790,6 +792,9 @@ def load_model2() -> tuple[Any, Any, dict, list]:
     t0 = time.perf_counter()
     logger.info("Loading Model 2 (Keras DNN) artifacts from %s", M2_DIR)
     _ensure_hf_artifact(M2_DIR / "model.keras", "model2_deep_learning/saved_model/model.keras")
+    _ensure_hf_artifact(M2_DIR / "scaler.joblib", "model2_deep_learning/saved_model/scaler.joblib")
+    _ensure_hf_artifact(M2_DIR / "preprocessing_state.joblib", "model2_deep_learning/saved_model/preprocessing_state.joblib")
+    _ensure_hf_artifact(M2_DIR / "feature_names.joblib", "model2_deep_learning/saved_model/feature_names.joblib")
     try:
         import tensorflow as tf
         model  = tf.keras.models.load_model(M2_DIR / "model.keras")
@@ -1159,6 +1164,7 @@ def load_model5() -> tuple[Any, dict, list]:
     logger.info("Loading Model 5 (LoS classifier) artifacts from %s", M5_DIR)
     _ensure_hf_artifact(M5_DIR / "model.joblib", "model5_innovation/saved_model/model.joblib")
     _ensure_hf_artifact(M5_DIR / "preprocessing_state.joblib", "model5_innovation/saved_model/preprocessing_state.joblib")
+    _ensure_hf_artifact(M5_DIR / "feature_names.joblib", "model5_innovation/saved_model/feature_names.joblib")
     try:
         model = joblib.load(M5_DIR / "model.joblib")
         state = joblib.load(M5_DIR / "preprocessing_state.joblib")
