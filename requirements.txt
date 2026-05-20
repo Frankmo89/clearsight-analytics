@@ -7,6 +7,7 @@ seaborn>=0.12.0
 
 # Deep Learning
 tensorflow==2.15.0
+keras<3.0          # keep Keras 2.x; Keras 3.x breaks TF 2.15 model loading
 torch>=2.0.0
 torchvision>=0.15.0
 

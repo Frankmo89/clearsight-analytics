@@ -3398,7 +3398,7 @@ def page_predict() -> None:
         # ── Auto-scroll to results after prediction ───────────────────
         import streamlit.components.v1 as _stc
         _stc.html(
-            "<script>window.scrollTo({top: document.body.scrollHeight, behavior:'smooth'});</script>",
+            "<script>if(document.body){window.scrollTo({top:document.body.scrollHeight,behavior:'smooth'});}else{window.addEventListener('load',function(){window.scrollTo({top:document.body.scrollHeight,behavior:'smooth'});});};</script>",
             height=0,
         )
 
