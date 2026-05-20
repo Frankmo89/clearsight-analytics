@@ -23,8 +23,8 @@ import streamlit as st
 from pathlib import Path
 from typing import Any
 import tensorflow as tf
+from tensorflow.keras.applications.resnet50 import preprocess_input
 from PIL import Image
-from keras.applications.resnet50 import preprocess_input
 import cv2
 import io
 import plotly.express as px
