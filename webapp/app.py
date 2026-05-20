@@ -22,13 +22,10 @@ import joblib
 import streamlit as st
 from pathlib import Path
 from typing import Any
-import tensorflow as tf
-from tensorflow.keras.applications.resnet50 import preprocess_input
 from PIL import Image
 import gc
 import cv2
 import io
-from tensorflow.keras import backend as K
 import plotly.express as px
 import plotly.graph_objects as go
 # torch and transformers are imported lazily inside load_model4() to avoid
@@ -791,6 +788,7 @@ def load_model2() -> tuple[Any, Any, dict, list]:
         FileNotFoundError: If any required artifact is missing from ``M2_DIR``.
         ImportError: If TensorFlow is not installed in the current environment.
     """
+    from tensorflow.keras import backend as K
     K.clear_session()
     gc.collect()
     t0 = time.perf_counter()
@@ -822,6 +820,8 @@ def load_model3():
     Returns:
         tf.keras.Model: Compiled model loaded from best_model.keras, or None on failure.
     """
+    import tensorflow as tf
+    from tensorflow.keras import backend as K
     K.clear_session()
     gc.collect()
     t0 = time.perf_counter()
@@ -846,6 +846,8 @@ def predict_m3(image_file, model) -> tuple[str, float]:
     Returns:
         A 2-tuple of (label: str, confidence: float 0–1).
     """
+    from tensorflow.keras.applications.resnet50 import preprocess_input
+    from tensorflow.keras import backend as K
     img = Image.open(image_file).convert("RGB")
     img = img.resize((224, 224))
     img_array = np.array(img)
@@ -876,6 +878,7 @@ def make_gradcam(img_array, model, last_conv_layer="conv5_block3_out"):
     Returns:
         heatmap: 2-D numpy array (H×W) with values in [0, 1].
     """
+    import tensorflow as tf
     grad_model = tf.keras.models.Model(
         [model.inputs],
         [model.get_layer(last_conv_layer).output, model.output]
@@ -1353,6 +1356,7 @@ def predict_m2(patient_dict: dict) -> tuple[int, float, float]:
     pred  = int(proba >= 0.5)
     conf  = max(proba, 1 - proba)
     logger.info("M2 result — proba=%.4f pred=%d", proba, pred)
+    from tensorflow.keras import backend as K
     K.clear_session()
     gc.collect()
     return pred, proba, conf
@@ -3354,6 +3358,8 @@ def page_predict() -> None:
                 st.error("Model 1 could not complete the prediction. The issue has been logged — please try again or contact support.")
 
         # ── Model 2 ──────────────────────────────────────────────────
+        st.cache_resource.clear()
+        gc.collect()
         with st.spinner("Running Model 2 — DNN…"):
             t0 = time.perf_counter()
             try:
@@ -3379,6 +3385,8 @@ def page_predict() -> None:
                 st.error("Capacity Planning model could not complete the prediction. The issue has been logged — please try again or contact support.")
 
         # ── Model 4 NLP ───────────────────────────────────────────────
+        st.cache_resource.clear()
+        gc.collect()
         with st.spinner("Analyzing clinical sentiment with BioBERT (LoRA)..."):
             try:
                 nlp_label, nlp_conf, nlp_css, nlp_explanation = predict_m4(clinical_notes, nlp_drug, nlp_cond)
