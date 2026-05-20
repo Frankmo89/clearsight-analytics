@@ -23,7 +23,7 @@ SAVED_MODEL_DIR = Path(__file__).resolve().parent / "saved_model"
 TEST_DATA_DIR = PROJECT_ROOT / "test_data"
 OUTPUT_FILE = TEST_DATA_DIR / "model5_results.csv"
 
-HF_REPO      = "FrankAlonsoskyMolina/clearsight-models"
+HF_REPO      = "FrankAlonsoskyMolina/clearsight-analytics"
 HF_SUBFOLDER = "model5_innovation/saved_model"
 
 LOS_LABELS = ['short_stay', 'medium_stay', 'extended_stay']

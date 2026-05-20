@@ -2,7 +2,7 @@
 
 This repository contains two NLP models that classify patient medication reviews into three effectiveness categories: **Highly Effective**, **Somewhat Effective**, and **Ineffective**. The production model is **BioBERT** — a 110-million parameter transformer pretrained on PubMed and PMC biomedical literature, then fine-tuned on 192,482 patient reviews using LoRA (Low-Rank Adaptation) so that only 0.87% of parameters train, preventing overfitting while achieving 90% accuracy. It is paired with drug and condition embeddings so the same review language is interpreted differently depending on which medication is being discussed. The second model is a **Bidirectional LSTM with Attention**, a lighter-weight alternative that also reaches 90% accuracy by learning which words in each review carry the most signal, combined with the same drug and condition embedding approach.
 
-Because the trained model weights are too large for GitHub (up to 435 MB each), all `.pt` and `.joblib` files are hosted on HuggingFace at [FrankAlonsoskyMolina/clearsight-models](https://huggingface.co/FrankAlonsoskyMolina/clearsight-models). Both `predict.py` and the train scripts automatically check for each required file before running — if a file is missing from the `saved_model/` folder it is downloaded from HuggingFace on the fly with no manual steps required. This means the repository can be cloned and run immediately without downloading any model files in advance.
+Because the trained model weights are too large for GitHub (up to 435 MB each), all `.pt` and `.joblib` files are hosted on HuggingFace at [FrankAlonsoskyMolina/clearsight-analytics](https://huggingface.co/FrankAlonsoskyMolina/clearsight-analytics). Both `predict.py` and the train scripts automatically check for each required file before running — if a file is missing from the `saved_model/` folder it is downloaded from HuggingFace on the fly with no manual steps required. This means the repository can be cloned and run immediately without downloading any model files in advance.
 
 Trained on 192,482 patient reviews spanning 3,570 unique drugs and 906 conditions.
 
@@ -72,7 +72,7 @@ The output CSV has three columns:
 ## Automatic Model Downloads (HuggingFace)
 
 Model weights and encoders are stored on HuggingFace at
-[FrankAlonsoskyMolina/clearsight-models](https://huggingface.co/FrankAlonsoskyMolina/clearsight-models)
+[FrankAlonsoskyMolina/clearsight-analytics](https://huggingface.co/FrankAlonsoskyMolina/clearsight-analytics)
 because the files are too large for GitHub (up to 435 MB each).
 
 **You do not need to download anything manually.** Both `predict.py` and the
@@ -87,7 +87,7 @@ If a file cannot be found locally or downloaded, a clear error is raised:
 
 ```
 RuntimeError: Could not find 'model_lstm0.pt' locally or download it from
-HuggingFace (FrankAlonsoskyMolina/clearsight-models).
+HuggingFace (FrankAlonsoskyMolina/clearsight-analytics).
 ```
 
 Files stored on HuggingFace:

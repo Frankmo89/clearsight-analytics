@@ -24,7 +24,7 @@ SAVED_MODEL_DIR = Path(__file__).resolve().parent / "saved_model"
 TEST_DATA_DIR = PROJECT_ROOT / "test_data"
 OUTPUT_FILE = TEST_DATA_DIR / "model2_results.csv"
 
-HF_REPO      = "FrankAlonsoskyMolina/clearsight-models"
+HF_REPO      = "FrankAlonsoskyMolina/clearsight-analytics"
 HF_SUBFOLDER = "model2_deep_learning/saved_model"
 
 

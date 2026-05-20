@@ -11,7 +11,7 @@ https://github.com/user-attachments/assets/cace6419-dd8c-4262-8358-8a1fd07e2b9c
 [![XGBoost](https://img.shields.io/badge/XGBoost-Ensemble-red)](https://xgboost.readthedocs.io/)
 [![TensorFlow](https://img.shields.io/badge/TensorFlow-2.15-FF6F00?logo=tensorflow&logoColor=white)](https://www.tensorflow.org/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-BioBERT-EE4C2C?logo=pytorch&logoColor=white)](https://pytorch.org/)
-[![HuggingFace](https://img.shields.io/badge/HuggingFace-BioBERT-FFD21E?logo=huggingface&logoColor=black)](https://huggingface.co/FrankAlonsoskyMolina/clearsight-models)
+[![HuggingFace](https://img.shields.io/badge/HuggingFace-BioBERT-FFD21E?logo=huggingface&logoColor=black)](https://huggingface.co/FrankAlonsoskyMolina/clearsight-analytics)
 [![Groq](https://img.shields.io/badge/Groq-Llama_3.1-f59e0b)](https://groq.com/)
 [![License](https://img.shields.io/badge/License-Academic-lightgrey)](LICENSE)
 
@@ -78,7 +78,7 @@ The NLP model is the most technically sophisticated component of the system.
 - **Performance:** Weighted F1 = **0.9018**, Accuracy = **90%**
 - **Classes:** Highly Effective / Somewhat Effective / Ineffective
 
-All model weights are hosted on [HuggingFace](https://huggingface.co/FrankAlonsoskyMolina/clearsight-models) and downloaded automatically on first run — no manual setup required.
+All model weights are hosted on [HuggingFace](https://huggingface.co/FrankAlonsoskyMolina/clearsight-analytics) and downloaded automatically on first run — no manual setup required.
 
 ---
 
@@ -174,7 +174,7 @@ streamlit run webapp/app.py
 
 Navigate to `http://localhost:8501` in your browser.
 
-> **Note:** On first run, the app will automatically download all model weights and the drug rankings CSV from HuggingFace (`FrankAlonsoskyMolina/clearsight-models`). The BioBERT model is ~435 MB — allow 1–2 minutes for the initial download.
+> **Note:** On first run, the app will automatically download all model weights and the drug rankings CSV from HuggingFace (`FrankAlonsoskyMolina/clearsight-analytics`). The BioBERT model is ~435 MB — allow 1–2 minutes for the initial download.
 
 ---
 
