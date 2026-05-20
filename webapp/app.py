@@ -25,8 +25,10 @@ from typing import Any
 import tensorflow as tf
 from tensorflow.keras.applications.resnet50 import preprocess_input
 from PIL import Image
+import gc
 import cv2
 import io
+from tensorflow.keras import backend as K
 import plotly.express as px
 import plotly.graph_objects as go
 # torch and transformers are imported lazily inside load_model4() to avoid
@@ -731,7 +733,7 @@ def _ensure_hf_artifact(local_path: Path, hf_filename: str) -> None:
         ) from exc
 
 
-@st.cache_resource(show_spinner=False)
+@st.cache_resource(max_entries=1, show_spinner=False)
 def load_model1() -> tuple[Any, dict, list, float]:
     """Loads and caches the Model 1 XGBoost ensemble and its preprocessing artifacts.
 
@@ -769,7 +771,7 @@ def load_model1() -> tuple[Any, dict, list, float]:
     return model, state, feats, thresh
 
 
-@st.cache_resource(show_spinner=False)
+@st.cache_resource(max_entries=1, show_spinner=False)
 def load_model2() -> tuple[Any, Any, dict, list]:
     """Loads and caches the Model 2 Keras DNN and its preprocessing artifacts.
 
@@ -789,6 +791,8 @@ def load_model2() -> tuple[Any, Any, dict, list]:
         FileNotFoundError: If any required artifact is missing from ``M2_DIR``.
         ImportError: If TensorFlow is not installed in the current environment.
     """
+    K.clear_session()
+    gc.collect()
     t0 = time.perf_counter()
     logger.info("Loading Model 2 (Keras DNN) artifacts from %s", M2_DIR)
     _ensure_hf_artifact(M2_DIR / "model.keras", "model2_deep_learning/saved_model/model.keras")
@@ -811,13 +815,15 @@ def load_model2() -> tuple[Any, Any, dict, list]:
 # =============================================================================
 # MODEL 3 — CNN Retinal (ResNet50, binary DR classifier)
 # =============================================================================
-@st.cache_resource(show_spinner=False)
+@st.cache_resource(max_entries=1, show_spinner=False)
 def load_model3():
     """Loads and caches the Model 3 ResNet50 Diabetic Retinopathy classifier.
 
     Returns:
         tf.keras.Model: Compiled model loaded from best_model.keras, or None on failure.
     """
+    K.clear_session()
+    gc.collect()
     t0 = time.perf_counter()
     logger.info("Loading Model 3 (CNN Retinal) from %s", M3_DIR)
     _ensure_hf_artifact(M3_DIR / "best_model.keras", "model3_cnn/saved_model/best_model.keras")
@@ -848,9 +854,12 @@ def predict_m3(image_file, model) -> tuple[str, float]:
     preds = model.predict(img_preprocessed)
     confidence = float(preds[0][0])
     if confidence > 0.5:
-        return "HIGH RISK — Diabetic Retinopathy Detected", confidence
+        label, conf_out = "HIGH RISK — Diabetic Retinopathy Detected", confidence
     else:
-        return "LOW RISK — No Retinopathy Detected", 1.0 - confidence
+        label, conf_out = "LOW RISK — No Retinopathy Detected", 1.0 - confidence
+    K.clear_session()
+    gc.collect()
+    return label, conf_out
 
 
 # =============================================================================
@@ -948,8 +957,10 @@ def get_m6_recommendations(condition: str, current_drug: str, top_n: int = 5) ->
     return matches.head(top_n)
 
 
-@st.cache_resource(show_spinner=False)
+@st.cache_resource(max_entries=1, show_spinner=False)
 def load_model4() -> tuple[Any, Any, Any, Any, Any]:
+    K.clear_session()
+    gc.collect()
     import torch
     import torch.nn as nn
     from transformers import AutoTokenizer, AutoModel
@@ -1080,6 +1091,8 @@ def predict_m4(text_notes: str, drug_name: str, condition: str) -> tuple[str, fl
     explanation   = explanation_map.get(label, "Interpretation unavailable for this label.")
     display_title = display_map.get(label, label.upper())
 
+    K.clear_session()
+    gc.collect()
     return f"{display_title} RISK SENTIMENT", confidence, css_map.get(label, "risk-low"), explanation
 
 
@@ -1141,7 +1154,7 @@ Keep the tone clinical, precise, and professional. Do not mention specific model
         return f"Synthesis unavailable: {str(e)}"
 
 
-@st.cache_resource(show_spinner=False)
+@st.cache_resource(max_entries=1, show_spinner=False)
 def load_model5() -> tuple[Any, dict, list]:
     """Loads and caches the Model 5 Length-of-Stay classifier and its artifacts.
 
@@ -1342,6 +1355,8 @@ def predict_m2(patient_dict: dict) -> tuple[int, float, float]:
     pred  = int(proba >= 0.5)
     conf  = max(proba, 1 - proba)
     logger.info("M2 result — proba=%.4f pred=%d", proba, pred)
+    K.clear_session()
+    gc.collect()
     return pred, proba, conf
 
 
