@@ -5101,6 +5101,7 @@ def page_retinal() -> None:
                         pil_img = Image.open(uploaded).convert("RGB")
                         img_arr = np.array(pil_img.resize((224, 224))).astype(np.float32)
                         img_arr = np.expand_dims(img_arr, axis=0)
+                        from tensorflow.keras.applications.resnet50 import preprocess_input
                         img_preprocessed = preprocess_input(img_arr)
                         heatmap = make_gradcam(img_preprocessed, model)
                         overlay = overlay_gradcam(pil_img, heatmap)
