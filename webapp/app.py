@@ -9,6 +9,12 @@ Run: streamlit run webapp/app.py   (from project root)
 ================================================================================
 """
 
+import os
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["TF_NUM_INTRAOP_THREADS"] = "1"
+os.environ["TF_NUM_INTEROP_THREADS"] = "1"
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+
 import sys
 import warnings
 warnings.filterwarnings("ignore")
