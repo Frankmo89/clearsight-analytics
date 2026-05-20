@@ -959,7 +959,6 @@ def get_m6_recommendations(condition: str, current_drug: str, top_n: int = 5) ->
 
 @st.cache_resource(max_entries=1, show_spinner=False)
 def load_model4() -> tuple[Any, Any, Any, Any, Any]:
-    K.clear_session()
     gc.collect()
     import torch
     import torch.nn as nn
@@ -1091,7 +1090,6 @@ def predict_m4(text_notes: str, drug_name: str, condition: str) -> tuple[str, fl
     explanation   = explanation_map.get(label, "Interpretation unavailable for this label.")
     display_title = display_map.get(label, label.upper())
 
-    K.clear_session()
     gc.collect()
     return f"{display_title} RISK SENTIMENT", confidence, css_map.get(label, "risk-low"), explanation
 
