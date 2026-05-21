@@ -1047,61 +1047,34 @@ def load_model4() -> tuple[Any, Any, Any, Any, Any]:
 
 
 def predict_m4(text_notes: str, drug_name: str, condition: str) -> tuple[str, float, str, str]:
-    """Runs NLP inference using the cached BioBERT Classifier."""
-    logger.info("M4 prediction triggered — drug=%s condition=%s", drug_name, condition)
-    import torch
-
-    model, tokenizer, drug_le, cond_le, label_le = load_model4()
-
-    def safe_encode(le: Any, val: str) -> int:
-        return le.transform([val if val in le.classes_ else "unknown"])[0]
-
-    # 1. Encode metadata
-    drug_idx = torch.tensor([safe_encode(drug_le, drug_name)], dtype=torch.long)
-    cond_idx = torch.tensor([safe_encode(cond_le, condition)], dtype=torch.long)
-
-    # 2. Tokenize raw text (BioBERT handles its own tokenization — no preprocessing)
-    enc = tokenizer(
-        str(text_notes),
-        max_length=256,
-        padding="max_length",
-        truncation=True,
-        return_tensors="pt",
-    )
-    input_ids = enc["input_ids"]
-    attn_mask = enc["attention_mask"]
-
-    # 3. Model forward pass
-    with torch.no_grad():
-        logits = model(input_ids, attn_mask, drug_idx, cond_idx)
-        probs  = torch.softmax(logits, dim=1).numpy()[0]
-        pred_idx = int(np.argmax(probs))
-
-    label      = label_le.inverse_transform([pred_idx])[0]
-    confidence = float(probs[pred_idx])
-    logger.info("M4 result — label=%s confidence=%.4f", label, confidence)
-
-    explanation_map = {
-        "Ineffective":        "Critical Interpretation: Linguistic markers suggest severe symptoms, treatment failure, or a potential emergency. Immediate review advised.",
-        "Somewhat Effective": "Elevated Interpretation: Linguistic markers indicate lingering symptoms or an incomplete response to current treatment context.",
-        "Highly Effective":   "Stable Interpretation: Linguistic markers indicate a positive response to treatment and stable patient condition.",
-    }
-    css_map = {
-        "Ineffective":        "risk-high",
-        "Somewhat Effective": "risk-medium",
-        "Highly Effective":   "risk-low",
-    }
-    display_map = {
-        "Ineffective":        "CRITICAL",
-        "Somewhat Effective": "ELEVATED",
-        "Highly Effective":   "STABLE",
-    }
-
-    explanation   = explanation_map.get(label, "Interpretation unavailable for this label.")
-    display_title = display_map.get(label, label.upper())
-
-    gc.collect()
-    return f"{display_title} RISK SENTIMENT", confidence, css_map.get(label, "risk-low"), explanation
+    """Runs NLP inference using BioBERT in an isolated subprocess (prevents TF/PyTorch collision)."""
+    import subprocess
+    import json
+    logger.info("M4 prediction triggered (subprocess) — drug=%s condition=%s", drug_name, condition)
+    _runner = PROJECT_ROOT / "webapp" / "m4_runner.py"
+    payload = json.dumps({
+        "m4_dir": str(M4_DIR),
+        "text":   text_notes,
+        "drug":   drug_name,
+        "cond":   condition,
+    })
+    try:
+        result = subprocess.run(
+            [sys.executable, str(_runner)],
+            input=payload,
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+    except subprocess.TimeoutExpired:
+        raise RuntimeError("M4 BioBERT inference timed out after 300 seconds.")
+    if result.returncode != 0:
+        raise RuntimeError(f"M4 subprocess failed:\n{result.stderr[-2000:]}")
+    data = json.loads(result.stdout)
+    if not data.get("success"):
+        raise RuntimeError(f"M4 inference error: {data.get('error')}\n{data.get('traceback', '')}")
+    logger.info("M4 result — label=%s confidence=%.4f", data["label"], data["confidence"])
+    return data["label"], data["confidence"], data["css"], data["explanation"]
 
 
 def generate_clinical_synthesis(
@@ -3002,6 +2975,376 @@ def parse_id(val: str) -> int:
 # =============================================================================
 # PAGE: PREDICT
 # =============================================================================
+def _render_copilot_ui() -> None:
+    """Renders the AI Clinical Copilot widget. Requires '_syn_p1' in session_state."""
+    if "_syn_p1" not in st.session_state:
+        st.info(
+            "👈 Complete **Clinical & Imaging** predictions first "
+            "to activate the AI Clinical Copilot."
+        )
+        return
+    st.markdown("""
+    <div class="section-head">
+      <span class="num">💬</span><h2>AI Clinical Copilot</h2><div class="line"></div>
+    </div>""", unsafe_allow_html=True)
+
+    st.markdown("""
+    <p style="font-size:0.82rem; color:#64748b; margin-bottom:1rem;
+              font-family:'JetBrains Mono',monospace; letter-spacing:0.03em;">
+        INTERACTIVE CLINICAL DECISION SUPPORT &nbsp;·&nbsp; LLAMA 3.1 via GROQ &nbsp;·&nbsp; FOLLOW-UP QUERIES
+    </p>""", unsafe_allow_html=True)
+
+    # Initialise persistent chat history
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = []
+
+    # ── System prompt — embeds live patient context ──────────────────────
+    _copilot_system_prompt = (
+        "You are an expert Clinical Decision Support System (CDSS). You assist "
+        "physicians by analyzing predictive model outputs and patient metrics. "
+        "Use professional medical terminology. DO NOT provide definitive diagnoses. "
+        "Prioritize patient safety and base all recommendations strictly on the "
+        "provided context.\n\n"
+        "CURRENT PATIENT — MULTI-MODEL AI DIAGNOSTIC OUTPUTS:\n"
+        f"  • Readmission Risk — XGBoost Ensemble (M1): {st.session_state['_syn_p1']*100:.1f}%\n"
+        f"  • Readmission Risk — Deep Neural Network (M2): {st.session_state['_syn_p2']*100:.1f}%\n"
+        f"  • Predicted Length of Stay (M5 Capacity Classifier): {st.session_state['_syn_m5']}\n"
+        f"  • Clinical Notes Sentiment Classification (NLP M4): {st.session_state['_syn_m4_label']}\n"
+        f"  • NLP Explanatory Context: {st.session_state['_syn_m4_expl']}\n"
+        f"  • Drug Assessed (Innovation — Drug Recommendation): {st.session_state.get('_syn_m6_drug', 'N/A')} for {st.session_state.get('_syn_m6_cond', 'N/A')}\n"
+        f"  • Recommended Alternatives (ranked by patient-reported effectiveness): {st.session_state.get('_syn_m6_recs', 'N/A')}\n\n"
+        "Respond only within the scope of these outputs and validated clinical evidence."
+        " CRITICAL RULE: YOU MUST ALWAYS END EVERY RESPONSE WITH THIS EXACT TEXT: "
+        "'\n\n\u26a0\ufe0f **Disclaimer:** This is an AI-generated analysis for investigational "
+        "use only. Always consult a licensed healthcare provider.'"
+    )
+
+    # ── Chat-specific CSS injection ───────────────────────────────────
+    st.markdown("""
+    <style>
+    /* ── Scrollable message window — top half of the widget ── */
+    [data-testid="stVerticalBlockBorderWrapper"] {
+        background: rgba(11,17,33,0.95) !important;
+        border: 1px solid rgba(34,211,238,0.2) !important;
+        border-radius: 12px 12px 0 0 !important;
+        padding: 0 !important;
+    }
+
+    /* ── Input form row — visually attached below the window ── */
+    [data-testid="stForm"] {
+        background: rgba(11,17,33,0.98) !important;
+        border: 1px solid rgba(34,211,238,0.2) !important;
+        border-top: none !important;
+        border-radius: 0 0 12px 12px !important;
+        padding: 0.6rem 0.8rem !important;
+        margin-top: 0 !important;
+    }
+    [data-testid="stForm"] > div:first-child {
+        border: none !important;
+        background: transparent !important;
+        padding: 0 !important;
+    }
+
+    /* ── Text input inside form ── */
+    [data-testid="stForm"] [data-testid="stTextInput"] input {
+        background-color: rgba(15,30,52,0.6) !important;
+        border: 1px solid rgba(34,211,238,0.25) !important;
+        border-radius: 8px !important;
+        color: #e2e8f0 !important;
+        caret-color: #22d3ee !important;
+        font-family: 'Inter', sans-serif !important;
+        font-size: 0.88rem !important;
+    }
+    [data-testid="stForm"] [data-testid="stTextInput"] input::placeholder {
+        color: #475569 !important;
+    }
+    [data-testid="stForm"] [data-testid="stTextInput"] input:focus {
+        border-color: rgba(34,211,238,0.55) !important;
+        box-shadow: 0 0 0 2px rgba(34,211,238,0.08) !important;
+    }
+    [data-testid="stForm"] [data-testid="stTextInput"] label { display:none !important; }
+
+    /* ── Send button ── */
+    [data-testid="stFormSubmitButton"] button {
+        background: rgba(34,211,238,0.12) !important;
+        border: 1px solid rgba(34,211,238,0.35) !important;
+        color: #22d3ee !important;
+        border-radius: 8px !important;
+        font-size: 1.1rem !important;
+        height: 2.4rem !important;
+        width: 100% !important;
+        transition: all 0.15s ease !important;
+    }
+    [data-testid="stFormSubmitButton"] button:hover {
+        background: rgba(34,211,238,0.22) !important;
+        border-color: rgba(34,211,238,0.6) !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    # ── Quick-starter buttons ────────────────────────────────────────
+    _qs_col1, _qs_col2, _qs_col3 = st.columns(3)
+    _starter_prompt = None
+
+    with _qs_col1:
+        if st.button(
+            "🔬 Elaborate on NLP Risk",
+            use_container_width=True,
+            key="qs_nlp_risk",
+        ):
+            _m4r = st.session_state.get("m4_result", {})
+            _starter_prompt = (
+                f"Elaborate on the clinical implications of the NLP-derived sentiment "
+                f"classification for this patient.\n\n"
+                f"PATIENT CONTEXT:\n"
+                f"- Age Bracket: {st.session_state.get('sb_age', 'Unknown')}\n"
+                f"- Gender: {st.session_state.get('sb_gender', 'Unknown')}\n"
+                f"- Primary ICD-9 Diagnosis: {st.session_state.get('ti_diag1', 'Unknown')}\n"
+                f"- Reported Drug (NLP input): {st.session_state.get('ti_nlp_drug', 'Unknown')}\n"
+                f"- Reported Condition (NLP input): {st.session_state.get('ti_nlp_cond', 'Unknown')}\n"
+                f"- M4 BioBERT Sentiment Label: {_m4r.get('label', st.session_state.get('_syn_m4_label', 'Unknown'))}\n"
+                f"- M4 Model Confidence: {_m4r.get('conf', 0)*100:.1f}%\n"
+                f"- M4 Explanation: {_m4r.get('explanation', st.session_state.get('_syn_m4_expl', 'N/A'))}\n"
+                f"- Drug Recommendation — Alternatives for {st.session_state.get('_syn_m6_cond', 'this condition')}: "
+                f"{st.session_state.get('_syn_m6_recs', 'No recommendation data available.')}\n\n"
+                "Reference pertinent ICD-10-CM diagnostic categories, relevant comorbidity "
+                "indices (Charlson, LACE), and validated predictive scoring instruments. "
+                "Identify all NLP-flagged risk signals and their specific clinical significance "
+                "for 30-day readmission risk. Based on the drug recommendation data provided, "
+                "include a section recommending alternative medications and explain why each "
+                "may produce better outcomes for this patient."
+            )
+
+    with _qs_col2:
+        if st.button(
+            "📋 Suggest Discharge Protocol",
+            use_container_width=True,
+            key="qs_discharge",
+        ):
+            _m1r = st.session_state.get("m1_result", {})
+            _m5r = st.session_state.get("m5_result", {})
+            _m1_proba = _m1r.get("proba", st.session_state.get("_syn_p1", 0))
+            _m2_proba = st.session_state.get("_syn_p2", 0)
+            _starter_prompt = (
+                f"Generate a structured, safe 30-day discharge and care transition "
+                f"protocol for this patient.\n\n"
+                f"PATIENT CONTEXT:\n"
+                f"- Age Bracket: {st.session_state.get('sb_age', 'Unknown')}\n"
+                f"- Gender: {st.session_state.get('sb_gender', 'Unknown')}\n"
+                f"- Race/Ethnicity: {st.session_state.get('sb_race', 'Unknown')}\n"
+                f"- Admission Type: {st.session_state.get('sb_admission_type', 'Unknown')}\n"
+                f"- Discharge Disposition: {st.session_state.get('sb_discharge_disp', 'Unknown')}\n"
+                f"- Primary ICD-9 Diagnosis: {st.session_state.get('ti_diag1', 'Unknown')}\n"
+                f"- Secondary Diagnosis: {st.session_state.get('ti_diag2', 'Unknown')}\n"
+                f"- Total Medications: {st.session_state.get('ni_meds', 'Unknown')}\n"
+                f"- Insulin Regimen: {st.session_state.get('sb_insulin', 'Unknown')}\n"
+                f"- HbA1c Result: {st.session_state.get('sb_a1c', 'Unknown')}\n"
+                f"- AI Readmission Risk — XGBoost M1: {_m1_proba*100:.1f}%\n"
+                f"- AI Readmission Risk — DNN M2: {_m2_proba*100:.1f}%\n"
+                f"- Predicted Length of Stay (M5): {_m5r.get('label', st.session_state.get('_syn_m5', 'Unknown'))}\n\n"
+                "FORMAT REQUIREMENTS:\n"
+                "- Provide a bulleted list of 3-4 immediate post-discharge actions.\n"
+                "- Suggest specific follow-up timelines based on the readmission risk level.\n"
+                "- Include a brief 'Red Flags' section for the patient to monitor at home.\n"
+                "- Address medication reconciliation concerns given the active drug list."
+            )
+
+    with _qs_col3:
+        if st.button(
+            "⚠️ Identify Primary Risk Drivers",
+            use_container_width=True,
+            key="qs_risk_drivers",
+        ):
+            _m1r = st.session_state.get("m1_result", {})
+            _m2r = st.session_state.get("m2_result", {})
+            _m1_proba = _m1r.get("proba", st.session_state.get("_syn_p1", 0))
+            _m2_proba = _m2r.get("proba", st.session_state.get("_syn_p2", 0))
+            _starter_prompt = (
+                f"Identify and rank the primary clinical risk drivers indicated by the "
+                f"multi-model diagnostic outputs for this patient.\n\n"
+                f"PATIENT CONTEXT:\n"
+                f"- Age Bracket: {st.session_state.get('sb_age', 'Unknown')}\n"
+                f"- Gender: {st.session_state.get('sb_gender', 'Unknown')}\n"
+                f"- Admission Type: {st.session_state.get('sb_admission_type', 'Unknown')}\n"
+                f"- Primary ICD-9 Diagnosis: {st.session_state.get('ti_diag1', 'Unknown')}\n"
+                f"- Secondary Diagnoses: {st.session_state.get('ti_diag2', 'Unknown')}, "
+                f"{st.session_state.get('ti_diag3', 'Unknown')}\n"
+                f"- Number of Active Diagnoses: {st.session_state.get('ni_diag', 'Unknown')}\n"
+                f"- Number of Medications: {st.session_state.get('ni_meds', 'Unknown')}\n"
+                f"- Number of Procedures: {st.session_state.get('ni_procs', 'Unknown')}\n"
+                f"- Prior Inpatient Visits: {st.session_state.get('ni_prior_inp', 'Unknown')}\n"
+                f"- Emergency Visits (past year): {st.session_state.get('ni_emergency', 'Unknown')}\n"
+                f"- HbA1c Result: {st.session_state.get('sb_a1c', 'Unknown')}\n"
+                f"- Max Glucose Serum: {st.session_state.get('sb_max_glu', 'Unknown')}\n"
+                f"- AI Readmission Risk — XGBoost M1: {_m1_proba*100:.1f}% "
+                f"(confidence: {_m1r.get('conf', 0)*100:.1f}%)\n"
+                f"- AI Readmission Risk — DNN M2: {_m2_proba*100:.1f}% "
+                f"(confidence: {_m2r.get('conf', 0)*100:.1f}%)\n"
+                f"- NLP Sentiment Classification (M4): {st.session_state.get('_syn_m4_label', 'Unknown')}\n\n"
+                "For each risk driver: specify the underlying clinical correlates, "
+                "associated ICD-10-CM codes where applicable, and prioritise targeted "
+                "interventions by urgency and projected impact on 30-day readmission prevention."
+            )
+
+    # ── HTML bubble renderer ──────────────────────────────────────────
+    import html as _html_mod
+    import re as _re_mod
+
+    def _render_bubble(text: str, role: str) -> str:
+        safe = _html_mod.escape(text)
+        safe = _re_mod.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", safe)
+        safe = _re_mod.sub(r"\*(.+?)\*", r"<em>\1</em>", safe)
+        safe = _re_mod.sub(
+            r"(?m)^(\d+)\.\s+(.+)$",
+            r"<span style='display:block;margin:0.15rem 0 0.15rem 0.8rem;'>"
+            r"<span style='color:#94a3b8;'>\1.</span> \2</span>",
+            safe,
+        )
+        safe = _re_mod.sub(
+            r"(?m)^-\s+(.+)$",
+            r"<span style='display:block;margin:0.15rem 0 0.15rem 0.8rem;'>"
+            r"<span style='color:#22d3ee;'>&#9656;</span> \1</span>",
+            safe,
+        )
+        safe = safe.replace("\n\n", "</p><p style='margin:0.5rem 0 0;'>")
+        safe = safe.replace("\n", "<br>")
+        if role == "user":
+            return (
+                "<div style='display:flex;flex-direction:column;"
+                "align-items:flex-end;margin:0.45rem 0.6rem;'>"
+                "<div style='font-size:0.62rem;font-weight:700;color:#22d3ee;"
+                "font-family:\"JetBrains Mono\",monospace;letter-spacing:0.1em;"
+                "margin-bottom:0.2rem;'>YOU</div>"
+                "<div style='background:rgba(34,211,238,0.08);"
+                "border:1px solid rgba(34,211,238,0.28);"
+                "border-radius:14px 14px 2px 14px;"
+                "padding:0.55rem 0.9rem;max-width:80%;"
+                "font-size:0.875rem;color:#e2e8f0;line-height:1.6;"
+                "font-family:\"Inter\",sans-serif;'>"
+                f"<p style='margin:0;'>{safe}</p></div></div>"
+            )
+        return (
+            "<div style='display:flex;flex-direction:column;"
+            "align-items:flex-start;margin:0.45rem 0.6rem;'>"
+            "<div style='font-size:0.62rem;font-weight:700;color:#10b981;"
+            "font-family:\"JetBrains Mono\",monospace;letter-spacing:0.1em;"
+            "margin-bottom:0.2rem;'>COPILOT &nbsp;&middot;&nbsp; LLAMA 3.1</div>"
+            "<div style='background:rgba(6,12,24,0.85);"
+            "border:1px solid rgba(16,185,129,0.18);"
+            "border-radius:14px 14px 14px 2px;"
+            "padding:0.55rem 0.9rem;max-width:86%;"
+            "font-size:0.875rem;color:#cbd5e1;line-height:1.65;"
+            "font-family:\"Inter\",sans-serif;'>"
+            f"<p style='margin:0;'>{safe}</p></div></div>"
+        )
+
+    # ── Bounded scrollable message window ──────────────────────────────
+    with st.container(height=430, border=True):
+        if not st.session_state.chat_history:
+            st.markdown(
+                "<div style='display:flex;align-items:center;"
+                "justify-content:center;height:100%;padding:3rem 0;'>"
+                "<p style='color:#334155;font-size:0.8rem;text-align:center;"
+                "font-family:\"JetBrains Mono\",monospace;letter-spacing:0.04em;'>"
+                "No messages yet.<br>Use the quick-starters above or type below.</p>"
+                "</div>",
+                unsafe_allow_html=True,
+            )
+        for _chat_msg in st.session_state.chat_history:
+            st.markdown(
+                _render_bubble(_chat_msg["content"], _chat_msg["role"]),
+                unsafe_allow_html=True,
+            )
+        # ── Auto-scroll to bottom after every render ────────────────────
+        st.markdown(
+            """
+            <script>
+            (function() {
+                // Target every Streamlit height-bounded vertical block wrapper
+                var wrappers = window.parent.document.querySelectorAll(
+                    '[data-testid="stVerticalBlockBorderWrapper"]'
+                );
+                if (!wrappers.length) return;
+                // The chat container is the last one on the page
+                var chatWrapper = wrappers[wrappers.length - 1];
+                // Walk up to find the overflow:auto scroll parent
+                var el = chatWrapper;
+                for (var i = 0; i < 8; i++) {
+                    el = el.parentElement;
+                    if (!el) break;
+                    var overflow = window.parent.getComputedStyle(el).overflowY;
+                    if (overflow === 'auto' || overflow === 'scroll') {
+                        el.scrollTop = el.scrollHeight;
+                        return;
+                    }
+                }
+                // Fallback: directly scroll the wrapper itself
+                chatWrapper.scrollTop = chatWrapper.scrollHeight;
+            })();
+            </script>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    # ── Inline input form — attached flush below the window ───────────────
+    with st.form(key="copilot_form", clear_on_submit=True):
+        _fi_col, _fb_col = st.columns([11, 1])
+        with _fi_col:
+            _typed_input = st.text_input(
+                label="msg",
+                label_visibility="collapsed",
+                placeholder="Type a clinical query and press Enter or ➤",
+                key="copilot_text_field",
+            )
+        with _fb_col:
+            _form_submitted = st.form_submit_button("➤", use_container_width=True)
+
+    _active_prompt = _starter_prompt or (
+        _typed_input.strip() if _form_submitted and _typed_input.strip() else None
+    )
+
+    if _active_prompt:
+        st.session_state.chat_history.append(
+            {"role": "user", "content": _active_prompt}
+        )
+        _reply = "⚠️ Copilot unavailable: unknown error."
+        with st.spinner("ClearSight Copilot is reasoning…"):
+            try:
+                from openai import OpenAI as _OpenAI  # noqa: PLC0415
+                _copilot_client = _OpenAI(
+                    api_key=st.secrets.get("GROQ_API_KEY", ""),
+                    base_url="https://api.groq.com/openai/v1",
+                )
+                _copilot_messages = [
+                    {"role": "system", "content": _copilot_system_prompt}
+                ] + [
+                    {"role": m["role"], "content": m["content"]}
+                    for m in st.session_state.chat_history
+                ]
+                _copilot_response = _copilot_client.chat.completions.create(
+                    model="llama-3.1-8b-instant",
+                    max_tokens=1024,
+                    temperature=0.2,
+                    messages=_copilot_messages,
+                )
+                _reply = _copilot_response.choices[0].message.content
+            except Exception as _copilot_err:
+                logger.error(
+                    "Copilot API call failed: %s", _copilot_err, exc_info=True
+                )
+                _reply = f"⚠️ Copilot unavailable: {_copilot_err}"
+        st.session_state.chat_history.append(
+            {"role": "assistant", "content": _reply}
+        )
+        st.rerun()
+
+    # ── Clear conversation ──────────────────────────────────────────
+    if st.session_state.chat_history:
+        if st.button("🗑️ Clear Conversation", key="clear_copilot_chat"):
+            st.session_state.chat_history = []
+            st.rerun()
+
+
 def page_predict() -> None:
     """Renders the Readmission Risk Predictor page.
 
@@ -3310,11 +3653,11 @@ def page_predict() -> None:
             )
 
         st.markdown("")
-        submitted = st.form_submit_button("⚡ RUN PREDICTION")
+        submitted = st.form_submit_button("💾 Save Patient Data")
 
-    # ── PREDICTIONS ───────────────────────────────────────────────────
+    # ── STORE INPUTS — each tab runs its own model independently ──────────────
     if submitted:
-        patient_dict = {
+        st.session_state["_patient_dict"] = {
             "age":                      age,
             "gender":                   gender,
             "race":                     race,
@@ -3341,100 +3684,10 @@ def page_predict() -> None:
             "max_glu_serum":            max_glu,
             "medical_specialty":        med_spec,
         }
-
-        # --- Run all models and persist results in session_state ---
-        proba1, proba2 = None, None
-        pred1, pred2 = None, None
-        conf1, conf2 = None, None
-        latency_m1, latency_m2 = 0, 0
-        los_label = los_conf = los_css = None
-        nlp_label = nlp_conf = nlp_css = nlp_explanation = None
-
-        # ── Model 1 ──────────────────────────────────────────────────
-        with st.spinner("Running Model 1 — XGBoost…"):
-            t0 = time.perf_counter()
-            try:
-                pred1, proba1, conf1 = predict_m1(patient_dict)
-                latency_m1 = (time.perf_counter() - t0) * 1000
-                st.session_state["m1_result"] = {
-                    "proba": proba1, "pred": pred1,
-                    "latency": latency_m1, "conf": conf1,
-                }
-            except Exception:
-                logger.error("M1 prediction failed", exc_info=True)
-                st.error("Model 1 could not complete the prediction. The issue has been logged — please try again or contact support.")
-
-        # ── Model 2 ──────────────────────────────────────────────────
-        st.cache_resource.clear()
-        gc.collect()
-        with st.spinner("Running Model 2 — DNN…"):
-            t0 = time.perf_counter()
-            try:
-                pred2, proba2, conf2 = predict_m2(patient_dict)
-                latency_m2 = (time.perf_counter() - t0) * 1000
-                st.session_state["m2_result"] = {
-                    "proba": proba2, "pred": pred2,
-                    "latency": latency_m2, "conf": conf2,
-                }
-            except Exception:
-                logger.error("M2 prediction failed", exc_info=True)
-                st.error("Model 2 could not complete the prediction. The issue has been logged — please try again or contact support.")
-
-        # ── Model 5 Innovation ────────────────────────────────────────
-        with st.spinner("Analyzing capacity requirements (Model 5)..."):
-            try:
-                los_label, los_conf, los_css = predict_m5(patient_dict)
-                st.session_state["m5_result"] = {
-                    "label": los_label, "conf": los_conf, "css": los_css,
-                }
-            except Exception:
-                logger.error("M5 prediction failed", exc_info=True)
-                st.error("Capacity Planning model could not complete the prediction. The issue has been logged — please try again or contact support.")
-
-        # ── Model 4 NLP ───────────────────────────────────────────────
-        st.cache_resource.clear()
-        gc.collect()
-        with st.spinner("Analyzing clinical sentiment with BioBERT (LoRA)..."):
-            try:
-                nlp_label, nlp_conf, nlp_css, nlp_explanation = predict_m4(clinical_notes, nlp_drug, nlp_cond)
-                st.session_state["m4_result"] = {
-                    "label": nlp_label, "conf": nlp_conf,
-                    "css": nlp_css, "explanation": nlp_explanation,
-                }
-                # Store M6 recommendations alongside M4 result
-                _recs_df = get_m6_recommendations(nlp_cond, nlp_drug)
-                if not _recs_df.empty:
-                    _recs_text = "; ".join(
-                        f"#{int(r['rank'])} {r['urlDrugName']} ({r['pct_highly_effective']*100:.1f}% highly effective)"
-                        for _, r in _recs_df.iterrows()
-                    )
-                else:
-                    _recs_text = "No alternatives found with sufficient patient review data."
-                st.session_state["_syn_m6_drug"]  = nlp_drug
-                st.session_state["_syn_m6_cond"]  = nlp_cond
-                st.session_state["_syn_m6_recs"]  = _recs_text
-            except Exception:
-                logger.error("M4 prediction failed", exc_info=True)
-                st.error("NLP Intelligence model could not complete the analysis. The issue has been logged — please try again or contact support.")
-
-        # ── Consensus — store in session_state so it survives re-runs ─
-        if proba1 is not None and proba2 is not None:
-            st.session_state["_syn_p1"] = proba1
-            st.session_state["_syn_p2"] = proba2
-            st.session_state["_syn_m5"] = los_label if los_label is not None else "Unavailable"
-            st.session_state["_syn_m4_label"] = nlp_label if nlp_label is not None else "Unavailable"
-            st.session_state["_syn_m4_expl"]  = nlp_explanation if nlp_explanation is not None else ""
-            st.session_state["_con_pred1"] = pred1
-            st.session_state["_con_pred2"] = pred2
-            st.session_state["_con_lat1"]  = latency_m1
-            st.session_state["_con_lat2"]  = latency_m2
-
-        # ── Auto-scroll to results after prediction ───────────────────
-        import streamlit.components.v1 as _stc
-        _stc.html(
-            "<script>if(document.body){window.scrollTo({top:document.body.scrollHeight,behavior:'smooth'});}else{window.addEventListener('load',function(){window.scrollTo({top:document.body.scrollHeight,behavior:'smooth'});});};</script>",
-            height=0,
-        )
+        st.session_state["_clinical_notes"] = clinical_notes
+        st.session_state["_nlp_drug"]       = nlp_drug
+        st.session_state["_nlp_cond"]       = nlp_cond
+        st.success("✓ Patient data saved — select a tab below and click **Run** to execute each model independently.")
 
     # ── CSS for gauges — injected always so persisted cards render correctly ──
     st.markdown("""
@@ -3541,31 +3794,66 @@ def page_predict() -> None:
         _n_t     = int(bool(_r1_t)) + int(bool(_r2_t))
         _avg_p_t = (_r1_t.get("proba", 0) + _r2_t.get("proba", 0)) / max(_n_t, 1)
         _t1_bdg  = "HIGH ⚠" if _avg_p_t >= 0.60 else ("MODERATE ⚡" if _avg_p_t >= 0.38 else "LOW ✓")
-        _tab1_label = f"🫀 Readmission · {_t1_bdg}"
+        _tab1_label = f"🫀 Clinical & Imaging · {_t1_bdg}"
     else:
-        _tab1_label = "🫀 Readmission Risk (M1 & M2)"
+        _tab1_label = "🫀 Clinical & Imaging"
 
     if "m4_result" in st.session_state:
-        _tab2_label = f"🧪 Notes · {st.session_state['m4_result']['label']}"
+        _tab2_label = f"🧪 Text Analytics · {st.session_state['m4_result']['label']}"
     else:
-        _tab2_label = "🧪 Clinical Notes (M4)"
+        _tab2_label = "🧪 Text Analytics"
 
     if "m5_result" in st.session_state:
-        _tab3_label = f"🏥 Ops · {st.session_state['m5_result']['label']}"
+        _tab3_label = f"🏥 Innovation · {st.session_state['m5_result']['label']}"
     else:
-        _tab3_label = "🏥 Capacity & Ops (M5)"
+        _tab3_label = "🏥 Innovation"
+
+    _tab4_label = "💬 AI Assistant"
 
     if True:  # tabs always visible — placeholders shown before first prediction
-        _tab1, _tab2, _tab3 = st.tabs([_tab1_label, _tab2_label, _tab3_label])
+        _tab1, _tab2, _tab3, _tab4 = st.tabs([_tab1_label, _tab2_label, _tab3_label, _tab4_label])
 
-        # ── TAB 1: Readmission Risk (M1 & M2) + Consensus ──────────
+        # ── TAB 1: Clinical & Imaging (M1 & M2) + Consensus ────────
         with _tab1:
-            if not (
-                "m1_result" in st.session_state
-                or "m2_result" in st.session_state
-                or "_syn_p1" in st.session_state
-            ):
-                st.info("👈 Fill out the patient encounter form and click **⚡ Run Prediction** to see readmission risk results here.")
+            _can_run_m1m2 = "_patient_dict" in st.session_state
+            if not _can_run_m1m2:
+                st.info("👈 Fill out the patient encounter form and click **💾 Save Patient Data** first.")
+            else:
+                if st.button("▶ Run Clinical Risk Models (M1 & M2)", key="run_m1m2_btn"):
+                    _pd = st.session_state["_patient_dict"]
+                    with st.spinner("Running Model 1 — XGBoost…"):
+                        _t0 = time.perf_counter()
+                        try:
+                            _pred1, _proba1, _conf1 = predict_m1(_pd)
+                            _lat1 = (time.perf_counter() - _t0) * 1000
+                            st.session_state["m1_result"] = {"proba": _proba1, "pred": _pred1, "latency": _lat1, "conf": _conf1}
+                        except Exception:
+                            logger.error("M1 prediction failed", exc_info=True)
+                            st.error("Model 1 could not complete the prediction.")
+                    st.cache_resource.clear()
+                    gc.collect()
+                    with st.spinner("Running Model 2 — DNN…"):
+                        _t0 = time.perf_counter()
+                        try:
+                            _pred2, _proba2, _conf2 = predict_m2(_pd)
+                            _lat2 = (time.perf_counter() - _t0) * 1000
+                            st.session_state["m2_result"] = {"proba": _proba2, "pred": _pred2, "latency": _lat2, "conf": _conf2}
+                        except Exception:
+                            logger.error("M2 prediction failed", exc_info=True)
+                            st.error("Model 2 could not complete the prediction.")
+                    if "m1_result" in st.session_state and "m2_result" in st.session_state:
+                        _rx1 = st.session_state["m1_result"]
+                        _rx2 = st.session_state["m2_result"]
+                        st.session_state["_syn_p1"]    = _rx1["proba"]
+                        st.session_state["_syn_p2"]    = _rx2["proba"]
+                        st.session_state["_con_pred1"] = _rx1["pred"]
+                        st.session_state["_con_pred2"] = _rx2["pred"]
+                        st.session_state["_con_lat1"]  = _rx1["latency"]
+                        st.session_state["_con_lat2"]  = _rx2["latency"]
+                        st.session_state.setdefault("_syn_m5", "Unavailable")
+                        st.session_state.setdefault("_syn_m4_label", "Unavailable")
+                        st.session_state.setdefault("_syn_m4_expl", "")
+                        st.rerun()
             if "m1_result" in st.session_state or "m2_result" in st.session_state:
                 st.markdown("""
                 <div class="section-head">
@@ -3645,10 +3933,37 @@ def page_predict() -> None:
                             margin-top:0.5rem; line-height:1.6; font-weight:500;">{_rec}</p>
                 </div>""", unsafe_allow_html=True)
 
-        # ── TAB 2: Clinical Notes (M4) + AI Clinical Synthesis ───────
+        # ── TAB 2: Text Analytics (M4 BioBERT) ────────────────────────
         with _tab2:
-            if not ("m4_result" in st.session_state or "_syn_p1" in st.session_state):
-                st.info("👈 Fill out the patient encounter form and click **⚡ Run Prediction** to see clinical notes analysis here.")
+            _can_run_m4 = "_patient_dict" in st.session_state
+            if not _can_run_m4:
+                st.info("👈 Fill out the patient encounter form and click **💾 Save Patient Data** first.")
+            else:
+                if st.button("▶ Analyze Clinical Notes (BioBERT M4)", key="run_m4_btn"):
+                    _cn  = st.session_state.get("_clinical_notes", "")
+                    _nld = st.session_state.get("_nlp_drug", "Metformin")
+                    _nlc = st.session_state.get("_nlp_cond", "Diabetes, Type 2")
+                    with st.spinner("Analyzing clinical sentiment with BioBERT (LoRA)..."):
+                        try:
+                            _nlp_lbl, _nlp_cnf, _nlp_css, _nlp_exp = predict_m4(_cn, _nld, _nlc)
+                            st.session_state["m4_result"] = {"label": _nlp_lbl, "conf": _nlp_cnf, "css": _nlp_css, "explanation": _nlp_exp}
+                            _recs_df = get_m6_recommendations(_nlc, _nld)
+                            if not _recs_df.empty:
+                                _recs_text = "; ".join(
+                                    f"#{int(r['rank'])} {r['urlDrugName']} ({r['pct_highly_effective']*100:.1f}% highly effective)"
+                                    for _, r in _recs_df.iterrows()
+                                )
+                            else:
+                                _recs_text = "No alternatives found with sufficient patient review data."
+                            st.session_state["_syn_m6_drug"]  = _nld
+                            st.session_state["_syn_m6_cond"]  = _nlc
+                            st.session_state["_syn_m6_recs"]  = _recs_text
+                            st.session_state["_syn_m4_label"] = _nlp_lbl
+                            st.session_state["_syn_m4_expl"]  = _nlp_exp
+                            st.rerun()
+                        except Exception:
+                            logger.error("M4 prediction failed", exc_info=True)
+                            st.error("NLP Intelligence model could not complete the analysis. The issue has been logged.")
             if "m4_result" in st.session_state:
                 r4 = st.session_state["m4_result"]
                 st.markdown("""<div class="section-head">
@@ -3728,10 +4043,23 @@ def page_predict() -> None:
                         del st.session_state["synthesis_result"]
                         st.rerun()
 
-        # ── TAB 3: Capacity & Ops (M5) + Drug Recommendation ─────────
+        # ── TAB 3: Innovation — Capacity Planning (M5) ─────────────
         with _tab3:
-            if not ("m5_result" in st.session_state or "m4_result" in st.session_state):
-                st.info("👈 Fill out the patient encounter form and click **⚡ Run Prediction** to see capacity & operations results here.")
+            _can_run_m5 = "_patient_dict" in st.session_state
+            if not _can_run_m5:
+                st.info("👈 Fill out the patient encounter form and click **💾 Save Patient Data** first.")
+            else:
+                if st.button("▶ Run Capacity Analysis (M5)", key="run_m5_btn"):
+                    _pd5 = st.session_state["_patient_dict"]
+                    with st.spinner("Analyzing capacity requirements (Model 5)..."):
+                        try:
+                            _los_lbl, _los_cnf, _los_css = predict_m5(_pd5)
+                            st.session_state["m5_result"] = {"label": _los_lbl, "conf": _los_cnf, "css": _los_css}
+                            st.session_state["_syn_m5"] = _los_lbl
+                            st.rerun()
+                        except Exception:
+                            logger.error("M5 prediction failed", exc_info=True)
+                            st.error("Capacity Planning model could not complete the prediction.")
             if "m5_result" in st.session_state:
                 r5 = st.session_state["m5_result"]
                 st.markdown("""<div class="section-head">
@@ -3818,6 +4146,10 @@ def page_predict() -> None:
 
                     st.markdown("</div>", unsafe_allow_html=True)
 
+        # ── TAB 4: AI Assistant ───────────────────────────────────────
+        with _tab4:
+            _render_copilot_ui()
+
     # ── Export Clinical Summary ───────────────────────────────────────────────
     if "_syn_p1" in st.session_state:
         with st.expander("📄 Export Clinical Summary (Copy to EHR)"):
@@ -3902,8 +4234,8 @@ ClearSight Analytics · Powered by XGBoost, DNN, BioBERT (LoRA), Llama 3.1
 
             st.code(clinical_report, language="markdown")
 
-    # ── AI Clinical Copilot ───────────────────────────────────────────────────
-    if "_syn_p1" in st.session_state:
+    # ── AI Clinical Copilot (rendered in Tab 4 via _render_copilot_ui()) ────────
+    if False:  # Copilot moved to Tab 4
         st.markdown("""
         <div class="section-head">
           <span class="num">💬</span><h2>AI Clinical Copilot</h2><div class="line"></div>
