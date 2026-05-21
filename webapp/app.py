@@ -3687,6 +3687,16 @@ def page_predict() -> None:
         st.session_state["_clinical_notes"] = clinical_notes
         st.session_state["_nlp_drug"]       = nlp_drug
         st.session_state["_nlp_cond"]       = nlp_cond
+        # ── Clear all previous-patient prediction results ─────────────
+        for _stale_key in (
+            "m1_result", "m2_result", "m4_result", "m5_result",
+            "_syn_p1", "_syn_p2", "_syn_m5",
+            "_syn_m4_label", "_syn_m4_expl",
+            "_syn_m6_drug", "_syn_m6_cond", "_syn_m6_recs",
+            "_con_pred1", "_con_pred2", "_con_lat1", "_con_lat2",
+            "chat_history",
+        ):
+            st.session_state.pop(_stale_key, None)
         st.success("✓ Patient data saved — select a tab below and click **Run** to execute each model independently.")
 
     # ── CSS for gauges — injected always so persisted cards render correctly ──
